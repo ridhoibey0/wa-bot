@@ -14,7 +14,7 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 const client = new Client({
   authStrategy: new LocalAuth(),
-    puppeteer: {
+  puppeteer: {
     headless: true,
     args: [
       "--no-sandbox",
@@ -26,10 +26,10 @@ const client = new Client({
       "--no-first-run",
       "--no-zygote",
       "--single-process", // <- this one doesn't works in Windows
-      "--disable-gpu"
+      "--disable-gpu",
     ],
     // session: sessionConfig
-  }
+  },
 });
 
 const saveLastMessage = async (phone, messages) => {
@@ -51,9 +51,8 @@ client.on("ready", () => {
   console.log("Client is ready!");
 });
 
-client.on("qr", (qr) => {
-  fs.writeFileSync("whatsapp.qr", qr);
-  console.log("QR Reloaded");
+client.on('qr', qr => {
+    qrcode.generate(qr, {small: true});
 });
 
 client.on("message", async (msg) => {
