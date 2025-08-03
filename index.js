@@ -7,6 +7,7 @@ const { createCanvas } = require("canvas");
 const QRCode = require("qrcode");
 const axios = require("axios");
 const db = require("./db");
+const qrcode = require('qrcode-terminal');
 
 const app = express();
 const port = 3000;
