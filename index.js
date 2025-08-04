@@ -1,6 +1,6 @@
 require("dotenv").config();
 const express = require("express");
-const { Client, LocalAuth, Poll } = require("whatsapp-web.js");
+const { Client, LocalAuth, Poll, MessageMedia } = require("whatsapp-web.js");
 const fs = require("fs");
 const fsAwait = fs.promises;
 const { createCanvas } = require("canvas");
