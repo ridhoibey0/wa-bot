@@ -56,6 +56,10 @@ client.on("qr", (qr) => {
   qrcode.generate(qr, { small: true });
 });
 
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 client.on("message", async (msg) => {
   let senderId;
   let myNumber = "5544836391092@lid";
@@ -207,20 +211,25 @@ Be helpful, concise, and a little bit witty, but always loyal..`,
       .join("\n");
     await saveLastMessage(phoneNumber, "#WAITING_MENU");
     const caption = `📋 *Daftar Menu:*\n\n${list}\n\nBalas dengan nomor atau nama menu.`;
-
+    await delay(2000);
     try {
       const media = MessageMedia.fromFilePath("./menu.jpeg");
       await msg.reply(media, undefined, { caption });
     } catch (err) {
       console.error("❌ Gagal kirim gambar:", err);
+      await delay(2000);
       await msg.reply(caption);
     }
   } else if (msg.body === "gathering") {
     if (user) {
+      await delay(2000);
+
       return msg.reply(
         `Halo *${user.name}*, kamu sudah terdaftar. Ketik /menu untuk pilih makanan 🍽️`
       );
     } else {
+      await delay(2000);
+
       await saveLastMessage(phoneNumber, "#REGIST");
       return msg.reply(
         "Silakan ketik nama lengkap kamu untuk registrasi mengikuti gathering."
@@ -242,12 +251,13 @@ Be helpful, concise, and a little bit witty, but always loyal..`,
 
     // Update status last message
     await saveLastMessage(phoneNumber, "#REGISTERED");
-
+    await delay(2000);
     return msg.reply(
       `✅ Terima kasih *${name}*, kamu sudah terdaftar! Ketik /menu untuk pilih makanan.`
     );
   } else if (lastMsg && lastMsg.messages == "#WAITING_MENU") {
     const existing = await db("menu_choices").where("user_id", user.id).first();
+    await delay(2000);
     if (existing) {
       const chosen = await db("menus").where("id", existing.menu_id).first();
       return msg.reply(
@@ -294,7 +304,7 @@ Be helpful, concise, and a little bit witty, but always loyal..`,
           `Bank: *Seabank*\n` +
           `No. Rekening: *901609178460*\n` +
           `a.n. *Nazwa Nurul Ramadani*\n\n` +
-          `E-Wallet: *Dana*\n`+
+          `E-Wallet: *Dana*\n` +
           `No Hp: *087847713098*\n` +
           `a.n. *Shaumi Isna Humaira*\n\n` +
           `📩 Setelah transfer, harap konfirmasi dan kirimkan bukti transfer ke panitia melalui WhatsApp:\n` +
@@ -318,8 +328,7 @@ Be helpful, concise, and a little bit witty, but always loyal..`,
     let text = `📋 *Data Lengkap Gathering*\n\n`;
 
     data.forEach((row, i) => {
-      const statusText =
-        row.status === "paid" ? "✅ Lunas" : "⏳ Belum bayar";
+      const statusText = row.status === "paid" ? "✅ Lunas" : "⏳ Belum bayar";
 
       text += `${i + 1}. *${row.name}*\n`;
       text += `   📞 ${row.phone}\n`;
