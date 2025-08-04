@@ -62,15 +62,14 @@ function delay(ms) {
 
 client.on("message", async (msg) => {
   let senderId;
-  let myNumber = "5544836391092@lid";
+  let myNumber = ["5544836391092@lid", "6287802337554@c.us"];
   if (msg.from.endsWith("@g.us")) {
     senderId = msg.author;
   } else {
     senderId = msg.from;
-    myNumber = "6287802337554@c.us";
   }
   console.log(senderId.split("@")[0]);
-  const isAdmin = senderId === myNumber;
+  const isAdmin = myNumber.includes(senderId);
   const phoneNumber = senderId.split("@")[0];
   const user = await db("users").where({ phone: phoneNumber }).first();
 
@@ -128,7 +127,7 @@ client.on("message", async (msg) => {
       //   console.log(voteCountStr)
     }
   } else if (msg.body.startsWith("do")) {
-    if (senderId !== myNumber) {
+    if (myNumber.includes(senderId)) {
       await msg.reply("Only ridho can use this feature.");
       return;
     }
@@ -335,10 +334,17 @@ Be helpful, concise, and a little bit witty, but always loyal..`,
 
     data.forEach((row, i) => {
       const statusText = row.status === "paid" ? "✅ Lunas" : "⏳ Belum bayar";
-
+      const basePrice = row.price;
+      const tax = basePrice * 0.1;
+      const soundFee = 10000;
+      const total = basePrice + tax + soundFee;
       text += `${i + 1}. *${row.name}*\n`;
       text += `   📞 ${row.phone}\n`;
-      text += `   🍽️ Menu: ${row.menu} (Rp${row.price.toLocaleString()})\n`;
+      text += `   🍽️ Menu: ${row.menu}\n`;
+      text += `       - Harga: Rp${basePrice.toLocaleString()}\n`;
+      text += `       - PPN 10%: Rp${tax.toLocaleString()}\n`;
+      text += `       - Biaya sound: Rp${soundFee.toLocaleString()}\n`;
+      text += `       - Total: Rp${total.toLocaleString()}\n`;
       text += `   💳 Status: ${statusText}\n\n`;
     });
 
