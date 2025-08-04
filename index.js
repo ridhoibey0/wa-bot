@@ -335,9 +335,17 @@ Be helpful, concise, and a little bit witty, but always loyal..`,
       ? phone
       : "62" + phone.slice(1);
 
+    const user = await db("users").where("phone", normalizedPhone).first();
+
+    if (!user) {
+      return msg.reply(
+        `❌ User dengan nomor *${normalizedPhone}* tidak ditemukan.`
+      );
+    }
+
     try {
       const updated = await knex("menu_choices")
-        .where("phone", normalizedPhone)
+        .where("user_id", user.id)
         .update({ status: "success" });
 
       if (updated > 0) {
