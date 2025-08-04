@@ -206,9 +206,15 @@ Be helpful, concise, and a little bit witty, but always loyal..`,
       .map((m, i) => `${i + 1}. ${m.name} (Rp${m.price.toLocaleString()})`)
       .join("\n");
     await saveLastMessage(phoneNumber, "#WAITING_MENU");
-    return msg.reply(
-      `📋 *Daftar Menu:*\n\n${list}\n\nBalas dengan nomor atau nama menu.`
-    );
+    const caption = `📋 *Daftar Menu:*\n\n${list}\n\nBalas dengan nomor atau nama menu.`;
+
+    try {
+      const media = MessageMedia.fromFilePath("./menu.jpeg");
+      await msg.reply(media, undefined, { caption });
+    } catch (err) {
+      console.error("❌ Gagal kirim gambar:", err);
+      await msg.reply(caption);
+    }
   } else if (msg.body === "gathering") {
     if (user) {
       return msg.reply(
