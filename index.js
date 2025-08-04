@@ -291,11 +291,14 @@ Be helpful, concise, and a little bit witty, but always loyal..`,
           `• Biaya sound system: Rp${soundFee.toLocaleString()}\n` +
           `• *Total yang harus ditransfer: Rp${total.toLocaleString()}*\n\n` +
           `💳 *Silakan transfer sejumlah Rp${total.toLocaleString()} ke rekening berikut:*\n` +
-          `Bank: *BNI*\n` +
-          `No. Rekening: *1234567890*\n` +
-          `a.n. *Panitia Gathering*\n\n` +
+          `Bank: *Seabank*\n` +
+          `No. Rekening: *901609178460*\n` +
+          `a.n. *Nazwa Nurul Ramadani*\n\n` +
+          `E-Wallet: *Dana*\n`+
+          `No Hp: *087847713098*\n` +
+          `a.n. *Shaumi Isna Humaira*\n\n` +
           `📩 Setelah transfer, harap konfirmasi dan kirimkan bukti transfer ke panitia melalui WhatsApp:\n` +
-          `👉 https://wa.me/6281234567890\n\n`
+          `👉 https://wa.me/+6289676300479\n\n`
       );
     }
 
