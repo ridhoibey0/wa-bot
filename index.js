@@ -346,7 +346,7 @@ Be helpful, concise, and a little bit witty, but always loyal..`,
     try {
       const updated = await db("menu_choices")
         .where("user_id", user.id)
-        .update({ status: "success" });
+        .update({ status: "paid" });
 
       if (updated > 0) {
         msg.reply(
