@@ -344,7 +344,7 @@ Be helpful, concise, and a little bit witty, but always loyal..`,
     }
 
     try {
-      const updated = await knex("menu_choices")
+      const updated = await db("menu_choices")
         .where("user_id", user.id)
         .update({ status: "success" });
 
