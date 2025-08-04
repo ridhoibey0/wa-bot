@@ -316,7 +316,7 @@ Be helpful, concise, and a little bit witty, but always loyal..`,
 
     data.forEach((row, i) => {
       const statusText =
-        row.status === "success" ? "✅ Lunas" : "⏳ Belum bayar";
+        row.status === "paid" ? "✅ Lunas" : "⏳ Belum bayar";
 
       text += `${i + 1}. *${row.name}*\n`;
       text += `   📞 ${row.phone}\n`;
