@@ -203,6 +203,12 @@ Be helpful, concise, and a little bit witty, but always loyal..`,
       }*.`
     );
   } else if (msg.body === "/menu") {
+    const existing = await db("menu_choices").where("user_id", user.id).first();
+    if (existingChoice) {
+      return msg.reply(
+        "✅ Kamu sudah memilih menu sebelumnya.\n\nJika ingin mengganti pilihan, silakan hubungi no berikut https://wa.me/6287802337554 terlebih dahulu."
+      );
+    }
     const menus = await db("menus").select();
     if (!menus.length) return msg.reply("📭 Belum ada menu.");
 
