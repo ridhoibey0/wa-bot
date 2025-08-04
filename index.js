@@ -7,7 +7,7 @@ const { createCanvas } = require("canvas");
 const QRCode = require("qrcode");
 const axios = require("axios");
 const db = require("./db");
-const qrcode = require('qrcode-terminal');
+const qrcode = require("qrcode-terminal");
 
 const app = express();
 const port = 3000;
@@ -52,8 +52,8 @@ client.on("ready", () => {
   console.log("Client is ready!");
 });
 
-client.on('qr', qr => {
-    qrcode.generate(qr, {small: true});
+client.on("qr", (qr) => {
+  qrcode.generate(qr, { small: true });
 });
 
 client.on("message", async (msg) => {
@@ -189,9 +189,14 @@ Be helpful, concise, and a little bit witty, but always loyal..`,
 
     if (!price) return msg.reply("⚠️ Harga tidak valid.");
 
-    await db("menus").insert({ name: name.trim(), price });
+    const [insertedId] = await db("menus")
+      .insert({ name: name.trim(), price })
+      .returning("id");
+
     return msg.reply(
-      `✅ Menu *${name.trim()}* (Rp${price.toLocaleString()}) ditambahkan.`
+      `✅ Menu *${name.trim()}* (Rp${price.toLocaleString()}) berhasil ditambahkan dengan ID *${
+        insertedId.id
+      }*.`
     );
   } else if (msg.body === "/menu") {
     const menus = await db("menus").select();
@@ -262,20 +267,29 @@ Be helpful, concise, and a little bit witty, but always loyal..`,
       await db("menu_choices").insert({
         user_id: user.id,
         menu_id: chosenMenu.id,
+        status: "pending",
       });
       await saveLastMessage(phoneNumber, "#CHOOSEN_MENU");
+      const basePrice = chosenMenu.price;
+      const tax = basePrice * 0.1;
+      const soundFee = 10000;
+      const total = basePrice + tax + soundFee;
 
       return msg.reply(
         `✅ Terima kasih, kamu memilih: *${
           chosenMenu.name
-        }* (Rp${chosenMenu.price.toLocaleString()})\n\n` +
-          `💳 *Silakan transfer sejumlah Rp${chosenMenu.price.toLocaleString()} ke rekening berikut:*\n` +
+        }* (Rp${basePrice.toLocaleString()})\n\n` +
+          `📊 *Rincian Biaya:*\n` +
+          `• Harga menu: Rp${basePrice.toLocaleString()}\n` +
+          `• Pajak 10%: Rp${tax.toLocaleString()}\n` +
+          `• Biaya sound system: Rp${soundFee.toLocaleString()}\n` +
+          `• *Total yang harus ditransfer: Rp${total.toLocaleString()}*\n\n` +
+          `💳 *Silakan transfer sejumlah Rp${total.toLocaleString()} ke rekening berikut:*\n` +
           `Bank: *BNI*\n` +
           `No. Rekening: *1234567890*\n` +
           `a.n. *Panitia Gathering*\n\n` +
           `📩 Setelah transfer, harap konfirmasi dan kirimkan bukti transfer ke panitia melalui WhatsApp:\n` +
-          `👉 https://wa.me/6281234567890\n\n` +
-          `Terima kasih atas partisipasimu! 🙌`
+          `👉 https://wa.me/6281234567890\n\n`
       );
     }
 
@@ -286,7 +300,7 @@ Be helpful, concise, and a little bit witty, but always loyal..`,
     const data = await db("menu_choices as mc")
       .join("users as u", "u.id", "mc.user_id")
       .join("menus as m", "m.id", "mc.menu_id")
-      .select("u.name", "u.phone", "m.name as menu", "m.price");
+      .select("u.name", "u.phone", "m.name as menu", "m.price", "mc.status");
 
     if (data.length === 0) {
       return msg.reply("📭 Belum ada yang mendaftar atau memilih menu.");
@@ -295,12 +309,42 @@ Be helpful, concise, and a little bit witty, but always loyal..`,
     let text = `📋 *Data Lengkap Gathering*\n\n`;
 
     data.forEach((row, i) => {
+      const statusText =
+        row.status === "success" ? "✅ Lunas" : "⏳ Belum bayar";
+
       text += `${i + 1}. *${row.name}*\n`;
       text += `   📞 ${row.phone}\n`;
       text += `   🍽️ Menu: ${row.menu} (Rp${row.price.toLocaleString()})\n`;
+      text += `   💳 Status: ${statusText}\n\n`;
     });
 
     await msg.reply(text);
+  } else if (msg.body.startsWith("/success") && isAdmin) {
+    const parts = msg.body.trim().split(" ");
+    if (parts.length < 2) {
+      return msg.reply("⚠️ Format salah. Gunakan: */success <nomor_hp>*");
+    }
+    const phone = parts[1].replace(/\D/g, "");
+    const normalizedPhone = phone.startsWith("62")
+      ? phone
+      : "62" + phone.slice(1);
+
+    try {
+      const updated = await knex("menu_choices")
+        .where("phone", normalizedPhone)
+        .update({ status: "success" });
+
+      if (updated > 0) {
+        msg.reply(
+          `✅ Status pembayaran untuk *${normalizedPhone}* berhasil diperbarui ke *success*.`
+        );
+      } else {
+        msg.reply(`❌ Tidak ditemukan data untuk nomor *${normalizedPhone}*.`);
+      }
+    } catch (err) {
+      console.error("Gagal update status:", err);
+      msg.reply("❌ Terjadi kesalahan saat mengupdate status.");
+    }
   }
 });
 
