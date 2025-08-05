@@ -103,7 +103,7 @@ client.on("message", async (msg) => {
     msg.reply("✅ Absen berhasil!");
 
     // Kirim ke grup
-    const groupId = "1203630xxxxxxx@g.us"; // ganti dengan ID grup kamu
+    const groupId = "120363402403833771@g.us"; // ganti dengan ID grup kamu
     const userName = user.name || phoneNumber;
 
     client.sendMessage(
