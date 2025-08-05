@@ -69,7 +69,6 @@ client.on("message", async (msg) => {
     senderId = msg.from;
   }
   console.log(senderId.split("@")[0]);
-  console.log(msg.from)
   const isAdmin = myNumber.includes(senderId);
   const phoneNumber = senderId.split("@")[0];
   const user = await db("users").where({ phone: phoneNumber }).first();
@@ -105,11 +104,28 @@ client.on("message", async (msg) => {
     // Kirim ke grup
     const groupId = "120363402403833771@g.us"; // ganti dengan ID grup kamu
     const userName = user.name || phoneNumber;
+    await delay(5000)
+    client.sendMessage(groupId, `*${userName}* berhasil melakukan absen`);
+  } else if (
+    (msg.body.toLowerCase() === "list absen" ||
+      msg.body.toLowerCase() === "daftar absen") &&
+    isAdmin
+  ) {
+    const results = await db("attendances")
+      .join("users", "attendances.user_id", "users.id")
+      .whereRaw("DATE(attendances.checkin) = CURRENT_DATE")
+      .select("users.name")
+      .orderBy("attendances.checkin", "asc");
 
-    client.sendMessage(
-      groupId,
-      `📋 ${userName} telah melakukan absen pada ${now.toLocaleString("id-ID")}`
-    );
+    if (results.length === 0) {
+      return msg.reply("📋 Belum ada yang absen hari ini.");
+    }
+
+    const listText = results
+      .map((row, i) => `${i + 1}. ${row.name}`)
+      .join("\n");
+
+    return msg.reply(`✅ *Daftar Absen Hari Ini:*\n\n${listText}`);
   } else if (msg.body.startsWith("ulang")) {
     if (senderId !== myNumber) {
       await msg.reply("Only ridho can use this feature.");
