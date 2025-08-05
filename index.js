@@ -313,7 +313,7 @@ Be helpful, concise, and a little bit witty, but always loyal..`,
           `No Hp: *087847713098*\n` +
           `a.n. *Shaumi Isna Humaira*\n\n` +
           `📩 Setelah transfer, harap konfirmasi dan kirimkan bukti transfer ke panitia melalui WhatsApp:\n` +
-          `💡 *Catatan:* Jika kamu transfer ke DANA melalui bank (ATM, m-banking, dsb), mohon *lebihkan Rp500 atau Rp1.000* untuk menghindari potongan dari pihak bank.` +
+          `💡 *Catatan:* Jika kamu transfer ke DANA melalui bank (ATM, m-banking, dsb), mohon *lebihkan Rp500 atau Rp1.000* untuk menghindari potongan dari pihak dana.` +
           `👉 https://wa.me/+6289676300479\n\n`
       );
     }
