@@ -69,6 +69,7 @@ client.on("message", async (msg) => {
     senderId = msg.from;
   }
   console.log(senderId.split("@")[0]);
+  console.log(msg.from)
   const isAdmin = myNumber.includes(senderId);
   const phoneNumber = senderId.split("@")[0];
   const user = await db("users").where({ phone: phoneNumber }).first();
@@ -87,6 +88,28 @@ client.on("message", async (msg) => {
     }
 
     await chat.sendMessage(text, { mentions });
+  } else if (msg.body === "absen") {
+    if (!user) {
+      return msg.reply("⚠️ Nomor kamu belum terdaftar.");
+    }
+    const now = new Date();
+
+    // Simpan absen
+    await db("attendances").insert({
+      user_id: user.id,
+      checkin: now,
+    });
+
+    msg.reply("✅ Absen berhasil!");
+
+    // Kirim ke grup
+    const groupId = "1203630xxxxxxx@g.us"; // ganti dengan ID grup kamu
+    const userName = user.name || phoneNumber;
+
+    client.sendMessage(
+      groupId,
+      `📋 ${userName} telah melakukan absen pada ${now.toLocaleString("id-ID")}`
+    );
   } else if (msg.body.startsWith("ulang")) {
     if (senderId !== myNumber) {
       await msg.reply("Only ridho can use this feature.");
