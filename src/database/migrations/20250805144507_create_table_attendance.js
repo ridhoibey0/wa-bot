@@ -7,7 +7,7 @@ const tableName = "attendances";
 exports.up = function (knex) {
   return knex.schema.createTable(tableName, (table) => {
     table.increments("id").primary();
-    table.string("user_id").unique().notNullable();
+    table.integer("user_id").unique().notNullable();
     table.datetime("checkin");
     table.foreign("user_id").references("id").inTable("users");
   });
