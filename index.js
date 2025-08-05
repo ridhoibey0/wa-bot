@@ -351,39 +351,45 @@ Be helpful, concise, and a little bit witty, but always loyal..`,
 
     await msg.reply(text);
   } else if (msg.body.startsWith("/success") && isAdmin) {
-    const parts = msg.body.trim().split(" ");
+    const parts = msg.body.trim().split(/\s+/); // split by any whitespace
     if (parts.length < 2) {
-      return msg.reply("⚠️ Format salah. Gunakan: */success <nomor_hp>*");
-    }
-    const phone = parts[1].replace(/\D/g, "");
-    const normalizedPhone = phone.startsWith("62")
-      ? phone
-      : "62" + phone.slice(1);
-
-    const user = await db("users").where("phone", normalizedPhone).first();
-
-    if (!user) {
       return msg.reply(
-        `❌ User dengan nomor *${normalizedPhone}* tidak ditemukan.`
+        "⚠️ Format salah. Gunakan: */success <nomor1> <nomor2> ...*"
       );
     }
 
-    try {
-      const updated = await db("menu_choices")
-        .where("user_id", user.id)
-        .update({ status: "paid" });
+    const numbers = parts.slice(1).map((phone) => {
+      const digits = phone.replace(/\D/g, "");
+      return digits.startsWith("62") ? digits : "62" + digits.slice(1);
+    });
 
-      if (updated > 0) {
-        msg.reply(
-          `✅ Status pembayaran untuk *${normalizedPhone}* berhasil diperbarui ke *success*.`
-        );
-      } else {
-        msg.reply(`❌ Tidak ditemukan data untuk nomor *${normalizedPhone}*.`);
+    const results = [];
+
+    for (const phone of numbers) {
+      try {
+        const user = await db("users").where("phone", phone).first();
+
+        if (!user) {
+          results.push(`❌ *${phone}* tidak ditemukan.`);
+          continue;
+        }
+
+        const updated = await db("menu_choices")
+          .where("user_id", user.id)
+          .update({ status: "paid" });
+
+        if (updated > 0) {
+          results.push(`✅ *${phone}* -> status diperbarui ke *success*.`);
+        } else {
+          results.push(`⚠️ *${phone}* -> tidak ada data menu ditemukan.`);
+        }
+      } catch (err) {
+        console.error(`Gagal update untuk ${phone}:`, err);
+        results.push(`❌ *${phone}* -> terjadi kesalahan saat update.`);
       }
-    } catch (err) {
-      console.error("Gagal update status:", err);
-      msg.reply("❌ Terjadi kesalahan saat mengupdate status.");
     }
+
+    return msg.reply(results.join("\n"));
   }
 });
 
