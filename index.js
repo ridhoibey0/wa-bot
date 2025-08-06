@@ -87,7 +87,7 @@ client.on("message", async (msg) => {
     }
 
     await chat.sendMessage(text, { mentions });
-  } else if (msg.body === "absen") {
+  } else if (msg.body === "hadir") {
     if (!user) {
       return msg.reply("⚠️ Nomor kamu belum terdaftar.");
     }
@@ -104,7 +104,7 @@ client.on("message", async (msg) => {
     // Kirim ke grup
     const groupId = "120363402403833771@g.us"; // ganti dengan ID grup kamu
     const userName = user.name || phoneNumber;
-    await delay(5000)
+    await delay(5000);
     client.sendMessage(groupId, `*${userName}* berhasil melakukan absen`);
   } else if (
     (msg.body.toLowerCase() === "list absen" ||
@@ -126,6 +126,22 @@ client.on("message", async (msg) => {
       .join("\n");
 
     return msg.reply(`✅ *Daftar Absen Hari Ini:*\n\n${listText}`);
+  } else if (msg.body.toLowerCase() === "list peserta" && isAdmin) {
+    try {
+      const users = await db("users").select("name");
+
+      if (users.length === 0) {
+        return msg.reply("👥 Belum ada peserta yang terdaftar.");
+      }
+
+      const list = users
+        .map((user, index) => `${index + 1}. ${user.name}`)
+        .join("\n");
+      await msg.reply(`📋 *Daftar Peserta:*\n\n${list}`);
+    } catch (error) {
+      console.error("Gagal mengambil daftar peserta:", error);
+      await msg.reply("❌ Terjadi kesalahan saat mengambil data peserta.");
+    }
   } else if (msg.body.startsWith("ulang")) {
     if (senderId !== myNumber) {
       await msg.reply("Only ridho can use this feature.");
