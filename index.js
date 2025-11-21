@@ -2,16 +2,22 @@ require("dotenv").config();
 const express = require("express");
 const { Client, LocalAuth, Poll, MessageMedia } = require("whatsapp-web.js");
 const fs = require("fs");
+const path = require("path");
 const fsAwait = fs.promises;
 const { createCanvas } = require("canvas");
 const QRCode = require("qrcode");
 const axios = require("axios");
 const db = require("./db");
 const qrcode = require("qrcode-terminal");
+const cron = require("node-cron");
+const gtts = require("gtts");
 
 const app = express();
 const port = 3000;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const DATA_FILE = path.join(__dirname, "muted.json");
+const MORNING_GROUP_ID = process.env.MORNING_GROUP_ID || "120363402403833771@g.us";
+const MORNING_TIME = process.env.MORNING_TIME || "0 7 * * *"; // Default: 07:00 setiap hari
 
 const client = new Client({
   authStrategy: new LocalAuth(),
@@ -48,8 +54,23 @@ const saveLastMessage = async (phone, messages) => {
   return upsert;
 };
 
+function loadData() {
+  if (!fs.existsSync(DATA_FILE)) {
+    fs.writeFileSync(DATA_FILE, JSON.stringify({ muted: [], log: [] }, null, 2));
+  }
+  return JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
+}
+
+// helper save data
+function saveData(data) {
+  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+}
+
 client.on("ready", () => {
   console.log("Client is ready!");
+  
+  // Setup morning greeting scheduler
+  setupMorningGreeting();
 });
 
 client.on("qr", (qr) => {
@@ -60,22 +81,109 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Fungsi untuk generate voice note dari text
+async function generateVoiceNote(text, filePath) {
+  return new Promise((resolve, reject) => {
+    const speech = new gtts(text, "id"); // "id" untuk bahasa Indonesia
+    speech.save(filePath, (err) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(filePath);
+      }
+    });
+  });
+}
+
+// Fungsi untuk mengirim morning greeting
+async function sendMorningGreeting() {
+  try {
+    console.log("[Morning Greeting] Memulai proses pengiriman...");
+    
+    const voiceFilePath = path.join(__dirname, "morning_greeting.mp3");
+    const greetingText = "Selamat pagi semuanya";
+    
+    // Generate voice note
+    await generateVoiceNote(greetingText, voiceFilePath);
+    console.log("[Morning Greeting] Voice note berhasil di-generate.");
+    
+    // Kirim voice note ke grup
+    const media = MessageMedia.fromFilePath(voiceFilePath);
+    await client.sendMessage(MORNING_GROUP_ID, media, {
+      sendAudioAsVoice: true
+    });
+    
+    console.log(`[Morning Greeting] Voice note berhasil dikirim ke grup ${MORNING_GROUP_ID}`);
+    
+    // Hapus file temporary setelah dikirim
+    setTimeout(() => {
+      if (fs.existsSync(voiceFilePath)) {
+        fs.unlinkSync(voiceFilePath);
+        console.log("[Morning Greeting] File temporary berhasil dihapus.");
+      }
+    }, 5000);
+    
+  } catch (error) {
+    console.error("[Morning Greeting] Error:", error.message || error);
+  }
+}
+
+// Fungsi untuk setup scheduler morning greeting
+function setupMorningGreeting() {
+  console.log(`[Morning Greeting] Scheduler diaktifkan dengan waktu: ${MORNING_TIME}`);
+  console.log(`[Morning Greeting] Target grup: ${MORNING_GROUP_ID}`);
+  
+  // Schedule task untuk mengirim morning greeting
+  cron.schedule(MORNING_TIME, () => {
+    console.log("[Morning Greeting] Waktunya mengirim greeting!");
+    sendMorningGreeting();
+  }, {
+    timezone: "Asia/Jakarta" // Sesuaikan dengan timezone Anda
+  });
+  
+  console.log("[Morning Greeting] Scheduler berhasil disetup!");
+}
+
 client.on("message", async (msg) => {
   let senderId;
   let myNumber = ["5544836391092@lid", "6287802337554@c.us"];
+    const data = loadData();
   if (msg.from.endsWith("@g.us")) {
     senderId = msg.author;
   } else {
     senderId = msg.from;
   }
-  console.log(senderId.split("@")[0]);
   const isAdmin = myNumber.includes(senderId);
-  const phoneNumber = senderId.split("@")[0];
-  const user = await db("users").where({ phone: phoneNumber }).first();
+  // const phoneNumber = senderId.split("@")[0];
+  // const user = await db("users").where({ phone: phoneNumber }).first();
 
-  const lastMsg = await db("last_messages").where("phone", phoneNumber).first();
+  // const lastMsg = await db("last_messages").where("phone", phoneNumber).first();
+  if (data.muted.includes(msg.author || msg.from)) {
+    try {
+      // hapus untuk semua orang
+      await msg.delete(true);
 
-  if (msg.body === "!tagall") {
+      // simpan ke log
+      data.log = data.log || [];
+      data.log.push({
+        id: msg.id._serialized,
+        author,
+        body: msg.body,
+        group: msg.from,
+        time: new Date().toISOString(),
+      });
+
+      // biar log nggak membengkak
+      if (data.log.length > 200) data.log.shift();
+
+      saveData(data);
+
+      console.log(`Pesan dari ${author} dihapus (muted).`);
+    } catch (err) {
+      console.error("Gagal hapus pesan:", err.message || err);
+    }
+  }
+  else if (msg.body === "!tagall") {
     await msg.reply("Ok sir");
     const chat = await msg.getChat();
     let text = "";
@@ -87,66 +195,72 @@ client.on("message", async (msg) => {
     }
 
     await chat.sendMessage(text, { mentions });
-  } else if (msg.body === "hadir") {
-    if (!user) {
-      return msg.reply("⚠️ Nomor kamu belum terdaftar.");
-    }
-    const now = new Date();
+//   } else if (msg.body.toLocaleLowerCase() === "hadir") {
+//     const attendance = await db("attendance").where("user_id", user.id);
 
-    // Simpan absen
-    await db("attendances").insert({
-      user_id: user.id,
-      checkin: now,
-    });
+//     if (!user) {
+//       return msg.reply("⚠️ Nomor kamu belum terdaftar.");
+//     }
 
-    msg.reply("✅ Absen berhasil!");
+//     if(attendance) {
+//       return msg.reply("Kamu sudah melakukan Absen Hari Ini")
+//     }
+//     const now = new Date();
 
-    // Kirim ke grup
-    const groupId = "120363402403833771@g.us"; // ganti dengan ID grup kamu
-    const userName = user.name || phoneNumber;
-    await delay(5000);
-    client.sendMessage(groupId, `*${userName}* berhasil melakukan absen`);
-  } else if (
-    (msg.body.toLowerCase() === "list absen" ||
-      msg.body.toLowerCase() === "daftar absen") &&
-    isAdmin
-  ) {
-    const results = await db("attendances")
-      .join("users", "attendances.user_id", "users.id")
-      .whereRaw("DATE(attendances.checkin) = CURRENT_DATE")
-      .select("users.name")
-      .orderBy("attendances.checkin", "asc");
+//     // Simpan absen
+//     await db("attendances").insert({
+//       user_id: user.id,
+//       checkin: now,
+//     });
 
-    if (results.length === 0) {
-      return msg.reply("📋 Belum ada yang absen hari ini.");
-    }
+//     msg.reply("✅ Absen berhasil!");
 
-    const listText = results
-      .map((row, i) => `${i + 1}. ${row.name}`)
-      .join("\n");
+//     // Kirim ke grup
+//     const groupId = "120363402403833771@g.us"; // ganti dengan ID grup kamu
+//     const userName = user.name || phoneNumber;
+//     await delay(5000);
+//     client.sendMessage(groupId, `*${userName}* berhasil melakukan absen`);
+//   } else if (
+//     (msg.body.toLowerCase() === "list absen" ||
+//       msg.body.toLowerCase() === "daftar absen") &&
+//     isAdmin
+//   ) {
+//     const results = await db("attendances")
+//       .join("users", "attendances.user_id", "users.id")
+//       .whereRaw("DATE(attendances.checkin) = CURRENT_DATE")
+//       .select("users.name")
+//       .orderBy("attendances.checkin", "asc");
 
-    return msg.reply(`✅ *Daftar Absen Hari Ini:*\n\n${listText}`);
-  } else if (msg.body.toLowerCase() === "list peserta" && isAdmin) {
-    try {
-      const users = await db("users").select("name");
+//     if (results.length === 0) {
+//       return msg.reply("📋 Belum ada yang absen hari ini.");
+//     }
 
-      if (users.length === 0) {
-        return msg.reply("👥 Belum ada peserta yang terdaftar.");
-      }
+//     const listText = results
+//       .map((row, i) => `${i + 1}. ${row.name}`)
+//       .join("\n");
 
-      const list = users
-        .map((user, index) => `${index + 1}. ${user.name}`)
-        .join("\n");
-      await msg.reply(`📋 *Daftar Peserta:*\n\n${list}`);
-    } catch (error) {
-      console.error("Gagal mengambil daftar peserta:", error);
-      await msg.reply("❌ Terjadi kesalahan saat mengambil data peserta.");
-    }
+//     return msg.reply(`✅ *Daftar Absen Hari Ini:*\n\n${listText}`);
+//   } else if (msg.body.toLowerCase() === "list peserta" && isAdmin) {
+//     try {
+//       const users = await db("users").select("name");
+
+//       if (users.length === 0) {
+//         return msg.reply("👥 Belum ada peserta yang terdaftar.");
+//       }
+
+//       const list = users
+//         .map((user, index) => `${index + 1}. ${user.name}`)
+//         .join("\n");
+//       await msg.reply(`📋 *Daftar Peserta:*\n\n${list}`);
+//     } catch (error) {
+//       console.error("Gagal mengambil daftar peserta:", error);
+//       await msg.reply("❌ Terjadi kesalahan saat mengambil data peserta.");
+//     }
   } else if (msg.body.startsWith("ulang")) {
-    if (senderId !== myNumber) {
-      await msg.reply("Only ridho can use this feature.");
-      return;
-    }
+    // if (senderId !== myNumber) {
+    //   await msg.reply("Only ridho can use this feature.");
+    //   return;
+    // }
     const args = msg.body.split(" ");
     const count = parseInt(args[1], 10);
 
@@ -164,24 +278,58 @@ client.on("message", async (msg) => {
         'Format salah. Gunakan "ulang [jumlah]" untuk mengulang pesan yang di-reply.'
       );
     }
-  } else if (msg.body == "cek vote") {
-    const quotedMsg = await msg.getQuotedMessage();
-    if (quotedMsg.type === "poll_creation") {
-      const options = msg.body.slice(6).split("//");
-      const voteCount = {};
-      console.log(quotedMsg);
-      // for (const pollVote of quotedMsg.pollVotes) {
-      //   for (const selectedOption of pollVote.selectedOptions) {
-      //     if (!voteCount[selectedOption]) voteCount[selectedOption] = 0;
-      //     voteCount[selectedOption]++;
-      //   }
-      // }
-      // const voteCountStr = Object.entries(voteCount)
-      //   .map(([vote, number]) => `  -${vote}: ${number}`)
-      //   .join("\n");
-      //   console.log(voteCountStr)
+  } else if (msg.hasMedia && msg.body.startsWith("do")) {
+  // Hanya proses jika pengirim adalah Anda
+  if (!myNumber.includes(senderId)) {
+    await msg.reply("Only ridho can use this feature.");
+    return;
+  }
+
+  const media = await msg.downloadMedia();
+
+  // Pastikan media adalah gambar sebelum melanjutkan
+  if (media && media.mimetype.startsWith("image/")) {
+    console.log("Image received, processing with Gemini Vision...");
+    const imageBase64 = media.data;
+    const promptText = msg.body.trim() || "What is in this picture? Describe it.";
+
+    try {
+      const response = await axios.post(
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        {
+          contents: [{
+            parts: [{
+              text: promptText,
+            }, {
+              inline_data: {
+                mime_type: media.mimetype,
+                data: imageBase64,
+              },
+            }, ],
+          }, ],
+        }, {
+          headers: {
+            "x-goog-api-key": GEMINI_API_KEY,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      // System instruction untuk model vision perlu diletakkan di dalam contents
+      // Namun, untuk menjaga konsistensi, kita bisa memprosesnya di sini.
+      // Untuk kesederhanaan, kita akan langsung kirim responsnya.
+      const result = response.data.candidates[0].content.parts[0].text;
+      const finalResponse = `Of course, Boss. Regarding the image you sent:\n\n${result}`;
+      await msg.reply(finalResponse);
+    } catch (error) {
+      console.error(
+        "Error calling Gemini Vision API:",
+        error.response?.data || error.message
+      );
+      await msg.reply("Sorry Boss, I had trouble understanding that image.");
     }
-  } else if (msg.body.startsWith("do")) {
+  }
+} else if (msg.body.startsWith("do")) {
     if (!myNumber.includes(senderId)) {
       await msg.reply("Only ridho can use this feature.");
       return;
@@ -237,238 +385,416 @@ Be helpful, concise, and a little bit witty, but always loyal..`,
         error.response?.data || error.message
       );
     }
-  } else if (msg.body.startsWith("/addmenu") && isAdmin) {
-    const parts = msg.body.replace("/addmenu", "").trim().split(" - ");
-    if (parts.length !== 2)
-      return msg.reply("⚠️ Format salah. Contoh:\n/addmenu Ayam Bakar - 20000");
-
-    const [name, priceStr] = parts;
-    const price = parseInt(priceStr.replace(/\D/g, ""), 10);
-
-    if (!price) return msg.reply("⚠️ Harga tidak valid.");
-
-    const [insertedId] = await db("menus")
-      .insert({ name: name.trim(), price })
-      .returning("id");
-
-    return msg.reply(
-      `✅ Menu *${name.trim()}* (Rp${price.toLocaleString()}) berhasil ditambahkan dengan ID *${
-        insertedId.id
-      }*.`
-    );
-  } else if (msg.body === "/menu") {
-    const existing = await db("menu_choices").where("user_id", user.id).first();
-    if (existing) {
-      return msg.reply(
-        "✅ Kamu sudah memilih menu sebelumnya.\n\nJika ingin mengganti pilihan, silakan hubungi no berikut https://wa.me/6287802337554 terlebih dahulu."
-      );
-    }
-    const menus = await db("menus").select();
-    if (!menus.length) return msg.reply("📭 Belum ada menu.");
-
-    const list = menus
-      .map((m, i) => `${i + 1}. ${m.name} (Rp${m.price.toLocaleString()})`)
-      .join("\n");
-    await saveLastMessage(phoneNumber, "#WAITING_MENU");
-    const caption = `📋 *Daftar Menu:*\n\n${list}\n\nBalas dengan nomor atau nama menu.`;
-    await delay(2000);
-    try {
-      const media = MessageMedia.fromFilePath("./menu.jpeg");
-      await msg.reply(media, undefined, { caption });
-    } catch (err) {
-      console.error("❌ Gagal kirim gambar:", err);
-      await delay(2000);
-      await msg.reply(caption);
-    }
-  } else if (msg.body === "gathering") {
-    if (user) {
-      await delay(2000);
-
-      return msg.reply(
-        `Halo *${user.name}*, kamu sudah terdaftar. Ketik /menu untuk pilih makanan 🍽️`
-      );
-    } else {
-      await delay(2000);
-
-      await saveLastMessage(phoneNumber, "#REGIST");
-      return msg.reply(
-        "Silakan ketik nama lengkap kamu untuk registrasi mengikuti gathering."
-      );
-    }
-  } else if (lastMsg && lastMsg.messages == "#REGIST") {
-    const name = msg.body.replace(/\s+/g, " ").trim();
-    if (name.length < 3) {
-      return msg.reply(
-        "⚠️ Nama terlalu pendek, silakan ketik ulang nama lengkap kamu."
-      );
-    }
-
-    // Simpan user ke DB
-    await db("users").insert({
-      phone: phoneNumber,
-      name,
-    });
-
-    // Update status last message
-    await saveLastMessage(phoneNumber, "#REGISTERED");
-    await delay(2000);
-    return msg.reply(
-      `✅ Terima kasih *${name}*, kamu sudah terdaftar! Ketik /menu untuk pilih makanan.`
-    );
-  } else if (lastMsg && lastMsg.messages == "#WAITING_MENU") {
-    const existing = await db("menu_choices").where("user_id", user.id).first();
-    await delay(2000);
-    if (existing) {
-      const chosen = await db("menus").where("id", existing.menu_id).first();
-      return msg.reply(
-        `✅ Kamu sudah memilih: *${
-          chosen.name
-        }* (Rp${chosen.price.toLocaleString()})`
-      );
-    }
-
-    const menus = await db("menus").select();
-    let chosenMenu;
-
-    if (/^\d+$/.test(msg.body)) {
-      const index = parseInt(msg.body) - 1;
-      if (menus[index]) chosenMenu = menus[index];
-    } else {
-      chosenMenu = menus.find(
-        (m) => m.name.toLowerCase() === msg.body.toLowerCase()
-      );
-    }
-
-    if (chosenMenu) {
-      await db("menu_choices").insert({
-        user_id: user.id,
-        menu_id: chosenMenu.id,
-        status: "pending",
-      });
-      await saveLastMessage(phoneNumber, "#CHOOSEN_MENU");
-      const basePrice = chosenMenu.price;
-      const tax = basePrice * 0.1;
-      const soundFee = 10000;
-      const total = basePrice + tax + soundFee;
-
-      return msg.reply(
-        `✅ Terima kasih, kamu memilih: *${
-          chosenMenu.name
-        }* (Rp${basePrice.toLocaleString()})\n\n` +
-          `📊 *Rincian Biaya:*\n` +
-          `• Harga menu: Rp${basePrice.toLocaleString()}\n` +
-          `• Pajak 10%: Rp${tax.toLocaleString()}\n` +
-          `• Biaya sound system: Rp${soundFee.toLocaleString()}\n` +
-          `• *Total yang harus ditransfer: Rp${total.toLocaleString()}*\n\n` +
-          `💳 *Silakan transfer sejumlah Rp${total.toLocaleString()} ke rekening berikut:*\n` +
-          `Bank: *Seabank*\n` +
-          `No. Rekening: *901609178460*\n` +
-          `a.n. *Nazwa Nurul Ramadani*\n\n` +
-          `E-Wallet: *Dana*\n` +
-          `No Hp: *087847713098*\n` +
-          `a.n. *Shaumi Isna Humaira*\n\n` +
-          `📩 Setelah transfer, harap konfirmasi dan kirimkan bukti transfer ke panitia melalui WhatsApp:\n` +
-          `👉 https://wa.me/+6289676300479\n\n` +
-          `💡 *Catatan:* Jika kamu transfer ke DANA melalui bank (ATM, m-banking, dsb), mohon *lebihkan Rp500 atau Rp1.000* untuk menghindari potongan dari pihak dana.`
-      );
-    }
-
-    return msg.reply(
-      "⚠️ Pilihan tidak dikenali. Ketik /menu untuk lihat daftar."
-    );
-  } else if (msg.body === "data lengkap gathering" && isAdmin) {
-    const data = await db("menu_choices as mc")
-      .join("users as u", "u.id", "mc.user_id")
-      .join("menus as m", "m.id", "mc.menu_id")
-      .select("u.name", "u.phone", "m.name as menu", "m.price", "mc.status");
-
-    if (data.length === 0) {
-      return msg.reply("📭 Belum ada yang mendaftar atau memilih menu.");
-    }
-
-    let text = `📋 *Data Lengkap Gathering*\n\n`;
-
-    data.forEach((row, i) => {
-      const statusText = row.status === "paid" ? "✅ Lunas" : "⏳ Belum bayar";
-      const basePrice = row.price;
-      const tax = basePrice * 0.1;
-      const soundFee = 10000;
-      const total = basePrice + tax + soundFee;
-      text += `${i + 1}. *${row.name}*\n`;
-      text += `   📞 ${row.phone}\n`;
-      text += `   🍽️ Menu: ${row.menu}\n`;
-      text += `       - Harga: Rp${basePrice.toLocaleString()}\n`;
-      text += `       - PPN 10%: Rp${tax.toLocaleString()}\n`;
-      text += `       - Biaya sound: Rp${soundFee.toLocaleString()}\n`;
-      text += `       - Total: Rp${total.toLocaleString()}\n`;
-      text += `   💳 Status: ${statusText}\n\n`;
-    });
-
-    await msg.reply(text);
-  } else if (msg.body.startsWith("/success") && isAdmin) {
-    const parts = msg.body.trim().split(/\s+/); // split by any whitespace
-    if (parts.length < 2) {
-      return msg.reply(
-        "⚠️ Format salah. Gunakan: */success <nomor1> <nomor2> ...*"
-      );
-    }
-
-    const numbers = parts.slice(1).map((phone) => {
-      const digits = phone.replace(/\D/g, "");
-      return digits.startsWith("62") ? digits : "62" + digits.slice(1);
-    });
-
-    const results = [];
-
-    for (const phone of numbers) {
-      try {
-        const user = await db("users").where("phone", phone).first();
-
-        if (!user) {
-          results.push(`❌ *${phone}* tidak ditemukan.`);
-          continue;
-        }
-
-        const updated = await db("menu_choices")
-          .where("user_id", user.id)
-          .update({ status: "paid" });
-
-        if (updated > 0) {
-          results.push(`✅ *${phone}* -> status diperbarui ke *success*.`);
-        } else {
-          results.push(`⚠️ *${phone}* -> tidak ada data menu ditemukan.`);
-        }
-      } catch (err) {
-        console.error(`Gagal update untuk ${phone}:`, err);
-        results.push(`❌ *${phone}* -> terjadi kesalahan saat update.`);
-      }
-    }
-
-    return msg.reply(results.join("\n"));
+  }  else if (msg.body === "silent him") {
+  // cek kalau yang jalanin command adalah kamu sendiri
+  if (!myNumber.includes(senderId)) {
+    await msg.reply("Only Ridho can use this feature.");
+    return;
   }
+
+  const chat = await msg.getChat();
+  if (!chat.isGroup) {
+    return msg.reply("This command can only be used in groups.");
+  }
+
+  const quotedMsg = await msg.getQuotedMessage();
+  if (!quotedMsg) {
+    return msg.reply("Please reply to a message to silent the sender.");
+  }
+
+  const targetId = quotedMsg.author || quotedMsg.from;
+  const contact = await client.getContactById(targetId);
+  if (!contact) {
+    return msg.reply("Failed to get contact information.");
+  }
+
+  // ==== bagian save ke JSON ====
+  const fs = require("fs");
+  const path = require("path");
+  const DATA_FILE = path.join(__dirname, "muted.json");
+
+  // load muted list
+  let data = { muted: [] };
+  if (fs.existsSync(DATA_FILE)) {
+    data = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
+  }
+
+  if (!data.muted.includes(targetId)) {
+    data.muted.push(targetId);
+    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+    await msg.reply(`✅ ${contact.pushname || contact.number} is now muted.`);
+  } else {
+    await msg.reply(`⚠️ ${contact.pushname || contact.number} is already muted.`);
+  }
+} else if (msg.body === "unsilent him") {
+  // cek kalau yang jalanin command adalah kamu sendiri
+  if (!myNumber.includes(senderId)) {
+    await msg.reply("Only Ridho can use this feature.");
+    return;
+  }
+  const chat = await msg.getChat();
+  if (!chat.isGroup) {
+    return msg.reply("This command can only be used in groups.");
+  }
+  const quotedMsg = await msg.getQuotedMessage();
+  if (!quotedMsg) {
+    return msg.reply("Please reply to a message to unsilent the sender.");
+  }
+  const targetId = quotedMsg.author || quotedMsg.from;
+  const contact = await client.getContactById(targetId);
+  if (!contact) {
+    return msg.reply("Failed to get contact information.");
+  }
+  // ==== bagian save ke JSON ====
+  const fs = require("fs");
+  const path = require("path");
+  const DATA_FILE = path.join(__dirname, "muted.json");
+  // load muted list
+  let data = { muted: [] };
+  if (fs.existsSync(DATA_FILE)) {
+    data = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
+  }
+  if (data.muted.includes(targetId)) {
+    data.muted = data.muted.filter((id) => id !== targetId);
+    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+    await msg.reply(`✅ ${contact.pushname || contact.number} is now unmuted.`);
+  } else {
+    await msg.reply(`⚠️ ${contact.pushname || contact.number} is not muted.`);
+  }
+} else if (msg.body === "kick him") {
+  // cek kalau yang jalanin command adalah kamu sendiri
+  if (!myNumber.includes(senderId)) {
+    await msg.reply("Only Ridho can use this feature.");
+    return;
+  }
+  const chat = await msg.getChat();
+  if (!chat.isGroup) {
+    return msg.reply("This command can only be used in groups.");
+  }
+  const quotedMsg = await msg.getQuotedMessage();
+  if (!quotedMsg) {
+    return msg.reply("Please reply to a message to kick the sender.");
+  }
+  const targetId = quotedMsg.author || quotedMsg.from;
+  const contact = await client.getContactById(targetId);
+  if (!contact) {
+    return msg.reply("Failed to get contact information.");
+  }
+  try {
+    await chat.removeParticipants([targetId]);
+    await msg.reply(`✅ ${contact.pushname || contact.number} has been kicked.`);
+  } catch (err) {
+    console.error("Failed to kick member:", err);
+    await msg.reply("❌ Failed to kick the member. Make sure I have admin rights.");
+  }
+}
+
+
+  // } else if (msg.body == "cek vote") {
+//     const quotedMsg = await msg.getQuotedMessage();
+//     if (quotedMsg.type === "poll_creation") {
+//       const options = msg.body.slice(6).split("//");
+//       const voteCount = {};
+//       console.log(quotedMsg);
+//       // for (const pollVote of quotedMsg.pollVotes) {
+//       //   for (const selectedOption of pollVote.selectedOptions) {
+//       //     if (!voteCount[selectedOption]) voteCount[selectedOption] = 0;
+//       //     voteCount[selectedOption]++;
+//       //   }
+//       // }
+//       // const voteCountStr = Object.entries(voteCount)
+//       //   .map(([vote, number]) => `  -${vote}: ${number}`)
+//       //   .join("\n");
+//       //   console.log(voteCountStr)
+//     }
+//   } else if (msg.body.startsWith("do")) {
+//     if (!myNumber.includes(senderId)) {
+//       await msg.reply("Only ridho can use this feature.");
+//       return;
+//     }
+//     let userCommand = msg.body.slice(2).trim();
+//     console.log(userCommand);
+//     let quotedText = "";
+
+//     if (msg.hasQuotedMsg) {
+//       const quoted = await msg.getQuotedMessage();
+//       quotedText = quoted.body.trim();
+//     }
+
+//     const prompt = quotedText ? `${userCommand}\n\n${quotedText}` : userCommand;
+//     console.log(prompt);
+//     try {
+//       const response = await axios.post(
+//         "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+//         {
+//           system_instruction: {
+//             parts: [
+//               {
+//                 text: `You are a personal assistant named Do Assistant.
+// Always call him "Boss" with respect.
+// Be helpful, concise, and a little bit witty, but always loyal..`,
+//               },
+//             ],
+//           },
+//           contents: [
+//             {
+//               parts: [
+//                 {
+//                   text: prompt,
+//                 },
+//               ],
+//             },
+//           ],
+//         },
+//         {
+//           headers: {
+//             "x-goog-api-key": GEMINI_API_KEY,
+//             "Content-Type": "application/json",
+//           },
+//         }
+//       );
+//       console.log(response.data);
+//       const result = response.data.candidates[0].content.parts[0].text;
+//       console.log(result);
+//       await msg.reply(result);
+//     } catch (error) {
+//       console.error(
+//         "Error calling Gemini API:",
+//         error.response?.data || error.message
+//       );
+//     }
+//   } else if (msg.body.startsWith("/addmenu") && isAdmin) {
+//     const parts = msg.body.replace("/addmenu", "").trim().split(" - ");
+//     if (parts.length !== 2)
+//       return msg.reply("⚠️ Format salah. Contoh:\n/addmenu Ayam Bakar - 20000");
+
+//     const [name, priceStr] = parts;
+//     const price = parseInt(priceStr.replace(/\D/g, ""), 10);
+
+//     if (!price) return msg.reply("⚠️ Harga tidak valid.");
+
+//     const [insertedId] = await db("menus")
+//       .insert({ name: name.trim(), price })
+//       .returning("id");
+
+//     return msg.reply(
+//       `✅ Menu *${name.trim()}* (Rp${price.toLocaleString()}) berhasil ditambahkan dengan ID *${
+//         insertedId.id
+//       }*.`
+//     );
+//   } else if (msg.body === "/menu") {
+//     const existing = await db("menu_choices").where("user_id", user.id).first();
+//     if (existing) {
+//       return msg.reply(
+//         "✅ Kamu sudah memilih menu sebelumnya.\n\nJika ingin mengganti pilihan, silakan hubungi no berikut https://wa.me/6287802337554 terlebih dahulu."
+//       );
+//     }
+//     const menus = await db("menus").select();
+//     if (!menus.length) return msg.reply("📭 Belum ada menu.");
+
+//     const list = menus
+//       .map((m, i) => `${i + 1}. ${m.name} (Rp${m.price.toLocaleString()})`)
+//       .join("\n");
+//     await saveLastMessage(phoneNumber, "#WAITING_MENU");
+//     const caption = `📋 *Daftar Menu:*\n\n${list}\n\nBalas dengan nomor atau nama menu.`;
+//     await delay(2000);
+//     try {
+//       const media = MessageMedia.fromFilePath("./menu.jpeg");
+//       await msg.reply(media, undefined, { caption });
+//     } catch (err) {
+//       console.error("❌ Gagal kirim gambar:", err);
+//       await delay(2000);
+//       await msg.reply(caption);
+//     }
+//   } else if (msg.body === "gathering") {
+//     if (user) {
+//       await delay(2000);
+
+//       return msg.reply(
+//         `Halo *${user.name}*, kamu sudah terdaftar. Ketik /menu untuk pilih makanan 🍽️`
+//       );
+//     } else {
+//       await delay(2000);
+
+//       await saveLastMessage(phoneNumber, "#REGIST");
+//       return msg.reply(
+//         "Silakan ketik nama lengkap kamu untuk registrasi mengikuti gathering."
+//       );
+//     }
+//   } else if (lastMsg && lastMsg.messages == "#REGIST") {
+//     const name = msg.body.replace(/\s+/g, " ").trim();
+//     if (name.length < 3) {
+//       return msg.reply(
+//         "⚠️ Nama terlalu pendek, silakan ketik ulang nama lengkap kamu."
+//       );
+//     }
+
+//     // Simpan user ke DB
+//     await db("users").insert({
+//       phone: phoneNumber,
+//       name,
+//     });
+
+//     // Update status last message
+//     await saveLastMessage(phoneNumber, "#REGISTERED");
+//     await delay(2000);
+//     return msg.reply(
+//       `✅ Terima kasih *${name}*, kamu sudah terdaftar! Ketik /menu untuk pilih makanan.`
+//     );
+//   } else if (lastMsg && lastMsg.messages == "#WAITING_MENU") {
+//     const existing = await db("menu_choices").where("user_id", user.id).first();
+//     await delay(2000);
+//     if (existing) {
+//       const chosen = await db("menus").where("id", existing.menu_id).first();
+//       return msg.reply(
+//         `✅ Kamu sudah memilih: *${
+//           chosen.name
+//         }* (Rp${chosen.price.toLocaleString()})`
+//       );
+//     }
+
+//     const menus = await db("menus").select();
+//     let chosenMenu;
+
+//     if (/^\d+$/.test(msg.body)) {
+//       const index = parseInt(msg.body) - 1;
+//       if (menus[index]) chosenMenu = menus[index];
+//     } else {
+//       chosenMenu = menus.find(
+//         (m) => m.name.toLowerCase() === msg.body.toLowerCase()
+//       );
+//     }
+
+//     if (chosenMenu) {
+//       await db("menu_choices").insert({
+//         user_id: user.id,
+//         menu_id: chosenMenu.id,
+//         status: "pending",
+//       });
+//       await saveLastMessage(phoneNumber, "#CHOOSEN_MENU");
+//       const basePrice = chosenMenu.price;
+//       const tax = basePrice * 0.1;
+//       const soundFee = 10000;
+//       const total = basePrice + tax + soundFee;
+
+//       return msg.reply(
+//         `✅ Terima kasih, kamu memilih: *${
+//           chosenMenu.name
+//         }* (Rp${basePrice.toLocaleString()})\n\n` +
+//           `📊 *Rincian Biaya:*\n` +
+//           `• Harga menu: Rp${basePrice.toLocaleString()}\n` +
+//           `• Pajak 10%: Rp${tax.toLocaleString()}\n` +
+//           `• Biaya sound system: Rp${soundFee.toLocaleString()}\n` +
+//           `• *Total yang harus ditransfer: Rp${total.toLocaleString()}*\n\n` +
+//           `💳 *Silakan transfer sejumlah Rp${total.toLocaleString()} ke rekening berikut:*\n` +
+//           `Bank: *Seabank*\n` +
+//           `No. Rekening: *901609178460*\n` +
+//           `a.n. *Nazwa Nurul Ramadani*\n\n` +
+//           `E-Wallet: *Dana*\n` +
+//           `No Hp: *087847713098*\n` +
+//           `a.n. *Shaumi Isna Humaira*\n\n` +
+//           `📩 Setelah transfer, harap konfirmasi dan kirimkan bukti transfer ke panitia melalui WhatsApp:\n` +
+//           `👉 https://wa.me/+6289676300479\n\n` +
+//           `💡 *Catatan:* Jika kamu transfer ke DANA melalui bank (ATM, m-banking, dsb), mohon *lebihkan Rp500 atau Rp1.000* untuk menghindari potongan dari pihak dana.`
+//       );
+//     }
+
+//     return msg.reply(
+//       "⚠️ Pilihan tidak dikenali. Ketik /menu untuk lihat daftar."
+//     );
+//   } else if (msg.body === "data lengkap gathering" && isAdmin) {
+//     const data = await db("menu_choices as mc")
+//       .join("users as u", "u.id", "mc.user_id")
+//       .join("menus as m", "m.id", "mc.menu_id")
+//       .select("u.name", "u.phone", "m.name as menu", "m.price", "mc.status");
+
+//     if (data.length === 0) {
+//       return msg.reply("📭 Belum ada yang mendaftar atau memilih menu.");
+//     }
+
+//     let text = `📋 *Data Lengkap Gathering*\n\n`;
+
+//     data.forEach((row, i) => {
+//       const statusText = row.status === "paid" ? "✅ Lunas" : "⏳ Belum bayar";
+//       const basePrice = row.price;
+//       const tax = basePrice * 0.1;
+//       const soundFee = 10000;
+//       const total = basePrice + tax + soundFee;
+//       text += `${i + 1}. *${row.name}*\n`;
+//       text += `   📞 ${row.phone}\n`;
+//       text += `   🍽️ Menu: ${row.menu}\n`;
+//       text += `       - Harga: Rp${basePrice.toLocaleString()}\n`;
+//       text += `       - PPN 10%: Rp${tax.toLocaleString()}\n`;
+//       text += `       - Biaya sound: Rp${soundFee.toLocaleString()}\n`;
+//       text += `       - Total: Rp${total.toLocaleString()}\n`;
+//       text += `   💳 Status: ${statusText}\n\n`;
+//     });
+
+//     await msg.reply(text);
+//   } else if (msg.body.startsWith("/success") && isAdmin) {
+//     const parts = msg.body.trim().split(/\s+/); // split by any whitespace
+//     if (parts.length < 2) {
+//       return msg.reply(
+//         "⚠️ Format salah. Gunakan: */success <nomor1> <nomor2> ...*"
+//       );
+//     }
+
+//     const numbers = parts.slice(1).map((phone) => {
+//       const digits = phone.replace(/\D/g, "");
+//       return digits.startsWith("62") ? digits : "62" + digits.slice(1);
+//     });
+
+//     const results = [];
+
+//     for (const phone of numbers) {
+//       try {
+//         const user = await db("users").where("phone", phone).first();
+
+//         if (!user) {
+//           results.push(`❌ *${phone}* tidak ditemukan.`);
+//           continue;
+//         }
+
+//         const updated = await db("menu_choices")
+//           .where("user_id", user.id)
+//           .update({ status: "paid" });
+
+//         if (updated > 0) {
+//           results.push(`✅ *${phone}* -> status diperbarui ke *success*.`);
+//         } else {
+//           results.push(`⚠️ *${phone}* -> tidak ada data menu ditemukan.`);
+//         }
+//       } catch (err) {
+//         console.error(`Gagal update untuk ${phone}:`, err);
+//         results.push(`❌ *${phone}* -> terjadi kesalahan saat update.`);
+//       }
+//     }
+
+//     return msg.reply(results.join("\n"));
+//   }
 });
 
-client.on("message_revoke_everyone", async (after, before) => {
-  // Pastikan before ada dan berasal dari grup
-  if (before && before.from.endsWith("@g.us")) {
-    const chatId = before.from; // ID grup
-    const senderId = before.author || before.id.participant; // Pengirim pesan asli
+// client.on("message_revoke_everyone", async (after, before) => {
+//   // Pastikan before ada dan berasal dari grup
+//   if (before && before.from.endsWith("@g.us")) {
+//     const chatId = before.from; // ID grup
+//     const senderId = before.author || before.id.participant; // Pengirim pesan asli
 
-    const chat = await before.getChat();
-    const contact = await client.getContactById(senderId);
+//     const chat = await before.getChat();
+//     const contact = await client.getContactById(senderId);
 
-    const message = `*Deleted message*\n\n👤 *Sender:* ${
-      contact.pushname || senderId
-    }\n *Message:* ${before.body}`;
+//     const message = `*Deleted message*\n\n👤 *Sender:* ${
+//       contact.pushname || senderId
+//     }\n *Message:* ${before.body}`;
 
-    await client.sendMessage(chatId, message);
-    console.log(
-      `[Deleted in group ${chat.name}] ${contact.pushname || senderId}: ${
-        before.body
-      }`
-    );
-  }
-});
+//     await client.sendMessage(chatId, message);
+//     console.log(
+//       `[Deleted in group ${chat.name}] ${contact.pushname || senderId}: ${
+//         before.body
+//       }`
+//     );
+//   }
+// });
 
 client.on("group_join", async (notification) => {
   try {
