@@ -48,6 +48,9 @@ app.use(
 // Dashboard routes
 app.use("/", dashboardRoutes);
 
+// Pass sendMorningGreeting function ke dashboard routes
+dashboardRoutes.setSendMorningGreeting(sendMorningGreeting);
+
 const client = new Client({
   authStrategy: new LocalAuth({
     clientId: "ridho-wa", // folder session unik
@@ -152,6 +155,12 @@ async function sendMorningGreeting() {
   try {
     console.log("[Morning Greeting] Memulai proses pengiriman...");
     
+    // Cek apakah client sudah ready
+    if (!isClientReady) {
+      console.log("[Morning Greeting] Client belum ready, skip pengiriman.");
+      return;
+    }
+    
     const voiceFilePath = path.join(__dirname, "morning_greeting.mp3");
     const greetingText = "Selamat pagi semuanya";
     
@@ -164,15 +173,36 @@ async function sendMorningGreeting() {
     
     for (const groupId of MORNING_GROUP_IDS) {
       try {
+        // Validasi format group ID
+        if (!groupId.endsWith('@g.us')) {
+          console.error(`[Morning Greeting] ID grup tidak valid: ${groupId}`);
+          continue;
+        }
+        
+        // Cek apakah chat tersedia
+        console.log(`[Morning Greeting] Mencoba mengirim ke ${groupId}...`);
+        
+        // Coba fetch chat terlebih dahulu untuk memastikan ada
+        const chat = await client.getChatById(groupId).catch(err => {
+          console.error(`[Morning Greeting] Chat ${groupId} tidak ditemukan:`, err.message);
+          return null;
+        });
+        
+        if (!chat) {
+          console.error(`[Morning Greeting] Grup ${groupId} tidak ditemukan atau bot tidak tergabung di grup tersebut.`);
+          continue;
+        }
+        
+        // Kirim voice note
         await client.sendMessage(groupId, media, {
           sendAudioAsVoice: true
         });
-        console.log(`[Morning Greeting] Voice note berhasil dikirim ke grup ${groupId}`);
+        console.log(`[Morning Greeting] ✅ Voice note berhasil dikirim ke grup ${groupId}`);
         
         // Delay antar grup untuk avoid spam detection
         await delay(2000);
       } catch (err) {
-        console.error(`[Morning Greeting] Error mengirim ke ${groupId}:`, err.message);
+        console.error(`[Morning Greeting] ❌ Error mengirim ke ${groupId}:`, err.message || err);
       }
     }
     

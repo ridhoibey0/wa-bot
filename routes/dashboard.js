@@ -4,9 +4,10 @@ const db = require("../db");
 const fs = require("fs");
 const path = require("path");
 
-// Variable untuk store QR code data
+// Store QR code dan status di memory
 let latestQRCode = null;
 let clientStatus = 'disconnected'; // disconnected, qr, connecting, connected
+let sendMorningGreetingFunction = null; // Will be set from index.js
 
 // Function untuk set QR code dari WhatsApp client
 const setQRCode = (qr) => {
@@ -18,9 +19,15 @@ const setClientStatus = (status) => {
   clientStatus = status;
 };
 
+// Function untuk set morning greeting function
+const setSendMorningGreeting = (fn) => {
+  sendMorningGreetingFunction = fn;
+};
+
 // Export function
 router.setQRCode = setQRCode;
 router.setClientStatus = setClientStatus;
+router.setSendMorningGreeting = setSendMorningGreeting;
 
 // Middleware untuk check auth (simple, bisa diperbaiki dengan session)
 const isAuthenticated = (req, res, next) => {
@@ -277,6 +284,32 @@ router.post("/muted/remove", isAuthenticated, (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).send("Error removing muted user");
+  }
+});
+
+// Test morning greeting endpoint
+router.post("/test-morning-greeting", isAuthenticated, async (req, res) => {
+  try {
+    if (!sendMorningGreetingFunction) {
+      return res.status(500).json({ 
+        success: false, 
+        message: "Morning greeting function not initialized" 
+      });
+    }
+
+    // Call the morning greeting function
+    await sendMorningGreetingFunction();
+    
+    res.json({ 
+      success: true, 
+      message: "Morning greeting sent successfully! Check PM2 logs for details." 
+    });
+  } catch (error) {
+    console.error("Error testing morning greeting:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message || "Error sending morning greeting" 
+    });
   }
 });
 
