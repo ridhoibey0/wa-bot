@@ -61,8 +61,10 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
   <script>
     let qrCodeObj = null;
+    const socket = io();
     
     async function checkQR() {
       try {
@@ -120,11 +122,76 @@
       }
     }
     
-    // Check QR on page load
+    // Socket.IO real-time updates
+    socket.on('connect', () => {
+      console.log('✅ Connected to server');
+      socket.emit('request_status');
+    });
+    
+    socket.on('qr_update', (data) => {
+      console.log('📱 QR Code updated');
+      if (data.qr) {
+        const statusText = document.getElementById('status-text');
+        const qrContainer = document.getElementById('qr-image-container');
+        
+        statusText.textContent = '📱 Silakan scan QR Code';
+        statusText.style.color = '#28a745';
+        
+        qrContainer.innerHTML = '';
+        
+        QRCode.toCanvas(data.qr, { 
+          width: 400,
+          margin: 2,
+          color: {
+            dark: '#000',
+            light: '#fff'
+          }
+        }, function (error, canvas) {
+          if (error) {
+            console.error(error);
+          } else {
+            canvas.style.border = '2px solid #ddd';
+            canvas.style.borderRadius = '10px';
+            canvas.style.maxWidth = '100%';
+            qrContainer.appendChild(canvas);
+          }
+        });
+      }
+    });
+    
+    socket.on('connection_status', (data) => {
+      console.log('📊 Status update:', data);
+      const statusText = document.getElementById('status-text');
+      const qrContainer = document.getElementById('qr-image-container');
+      
+      if (data.status === 'connected') {
+        statusText.textContent = '✅ WhatsApp sudah terkoneksi!';
+        statusText.style.color = '#28a745';
+        qrContainer.innerHTML = '<div style="padding: 40px; background: #d4edda; border-radius: 10px; color: #155724; text-align: center;"><h3>✅ Bot Sudah Aktif!</h3><p style="margin-top: 10px;">WhatsApp sudah terkoneksi dan siap digunakan.</p><p style="margin-top: 15px; font-size: 14px; opacity: 0.8;">Tidak perlu scan QR lagi.</p></div>';
+      } else if (data.status === 'connecting' || data.status === 'loading') {
+        statusText.textContent = '⏳ Sedang menghubungkan...';
+        statusText.style.color = '#0056b3';
+        qrContainer.innerHTML = '<div style="padding: 40px; color: #0056b3; text-align: center;"><div style="font-size: 40px; margin-bottom: 15px;">🔄</div><p style="font-weight: 600;">Authenticating...</p></div>';
+      } else if (data.status === 'disconnected') {
+        statusText.textContent = '❌ Terputus dari WhatsApp';
+        statusText.style.color = '#dc3545';
+        qrContainer.innerHTML = '<p style="color: #999;">Reconnecting...</p>';
+      }
+    });
+    
+    socket.on('disconnect', () => {
+      console.log('❌ Disconnected from server');
+    });
+    
+    // Initial check
     checkQR();
     
-    // Auto refresh every 5 seconds
-    setInterval(checkQR, 5000);
+    // Fallback: Auto refresh every 30 seconds (jika socket gagal)
+    setInterval(() => {
+      if (!socket.connected) {
+        checkQR();
+      }
+    }, 30000);
   </script>
 </body>
 </html>

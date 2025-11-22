@@ -1,5 +1,7 @@
 require("dotenv").config();
 const express = require("express");
+const http = require("http");
+const socketIo = require("socket.io");
 const session = require("express-session");
 const bodyParser = require("body-parser");
 const { Client, LocalAuth, Poll, MessageMedia } = require("whatsapp-web.js");
@@ -14,9 +16,20 @@ const qrcode = require("qrcode-terminal");
 const cron = require("node-cron");
 const gtts = require("gtts");
 const dashboardRoutes = require("./routes/dashboard");
+const socketManager = require("./utils/socketManager");
 
 const app = express();
+const server = http.createServer(app);
+const io = socketIo(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
 const port = 3000;
+
+// Initialize Socket.IO manager
+socketManager.setSocketIO(io);
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const DATA_FILE = path.join(__dirname, "muted.json");
 // Support multiple group IDs separated by comma
@@ -136,6 +149,12 @@ client.on("ready", () => {
   dashboardRoutes.setQRCode(null);
   dashboardRoutes.setClientStatus(clientStatus);
   
+  // Emit to all connected clients
+  socketManager.emitConnectionStatus('connected', {
+    info: client.info,
+    message: '✅ WhatsApp connected successfully!'
+  });
+  
   // Setup morning greeting scheduler
   setupMorningGreeting();
 });
@@ -153,12 +172,36 @@ client.on("qr", (qr) => {
     dashboardRoutes.setQRCode(qr);
     dashboardRoutes.setClientStatus(clientStatus);
     
+    // Emit QR code to all connected clients via Socket.IO
+    socketManager.emitQRCode(qr);
+    
     // Save ke file juga (backward compatibility)
     fs.writeFileSync(path.join(__dirname, "whatsapp.qr"), qr);
     console.log("[QR Code] QR code telah di-generate dan tersedia di dashboard");
   } else {
     console.log("[QR Code] Client sudah terkoneksi, skip QR generation");
   }
+});
+
+client.on("authenticated", () => {
+  console.log("[WhatsApp] Client authenticated!");
+  clientStatus = 'connecting';
+  dashboardRoutes.setClientStatus(clientStatus);
+  socketManager.emitConnectionStatus('connecting', { message: 'Authenticating...' });
+});
+
+client.on("loading_screen", (percent, message) => {
+  console.log(`[WhatsApp] Loading... ${percent}% - ${message}`);
+  socketManager.emitConnectionStatus('loading', { percent, message });
+});
+
+client.on("disconnected", (reason) => {
+  console.log("[WhatsApp] Client disconnected:", reason);
+  isClientReady = false;
+  clientStatus = 'disconnected';
+  currentQRCode = null;
+  dashboardRoutes.setClientStatus(clientStatus);
+  socketManager.emitConnectionStatus('disconnected', { reason });
 });
 
 function delay(ms) {
@@ -217,11 +260,25 @@ async function sendMorningGreeting() {
         });
         console.log(`[Morning Greeting] ✅ Voice note berhasil dikirim ke grup ${groupId}`);
         
+        // Emit real-time update
+        socketManager.emitMorningGreetingStatus({
+          groupId,
+          status: 'voice_sent',
+          message: `Voice note berhasil dikirim ke grup ${groupId}`
+        });
+        
         // Kirim pesan tambahan jika grup ini termasuk dalam daftar extra message
         if (MORNING_EXTRA_MESSAGE && MORNING_EXTRA_MESSAGE_GROUP_IDS.includes(groupId)) {
           await delay(2000); // Delay sebelum kirim pesan text
           await client.sendMessage(groupId, MORNING_EXTRA_MESSAGE);
           console.log(`[Morning Greeting] ✅ Pesan reminder berhasil dikirim ke grup ${groupId}`);
+          
+          // Emit real-time update
+          socketManager.emitMorningGreetingStatus({
+            groupId,
+            status: 'reminder_sent',
+            message: `Pesan reminder berhasil dikirim ke grup ${groupId}`
+          });
         }
         
         // Delay antar grup untuk avoid spam detection
@@ -1088,8 +1145,72 @@ app.get("/qrcode", async (req, res) => {
   }
 });
 
-app.listen(port, () => {
-  console.log(`Server berjalan di http://localhost:${port}`);
+// Socket.IO connection handling
+io.on('connection', (socket) => {
+  console.log('👤 Client connected:', socket.id);
+  
+  // Send current status on connection
+  socket.emit('connection_status', { 
+    status: clientStatus,
+    ready: isClientReady
+  });
+  
+  // Send current QR if available
+  if (currentQRCode && clientStatus === 'qr') {
+    socket.emit('qr_update', { qr: currentQRCode, status: 'qr' });
+  }
+  
+  socket.on('disconnect', () => {
+    console.log('👤 Client disconnected:', socket.id);
+  });
+  
+  socket.on('request_status', () => {
+    socket.emit('connection_status', { 
+      status: clientStatus,
+      ready: isClientReady,
+      info: client.info || null
+    });
+  });
+  
+  socket.on('request_qr', () => {
+    if (currentQRCode && clientStatus === 'qr') {
+      socket.emit('qr_update', { qr: currentQRCode, status: 'qr' });
+    }
+  });
 });
 
+// Start server
+server.listen(port, () => {
+  console.log(`🌟 Server running on http://localhost:${port}`);
+  console.log(`📱 Dashboard: http://localhost:${port}/dashboard`);
+});
+
+// Initialize WhatsApp client
 client.initialize();
+
+// Graceful shutdown
+process.on('SIGINT', async () => {
+  console.log('\n🔄 Shutting down gracefully...');
+  
+  if (client) {
+    await client.destroy();
+    console.log('✅ WhatsApp client destroyed');
+  }
+  
+  server.close(() => {
+    console.log('✅ Server closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGTERM', async () => {
+  console.log('🔄 SIGTERM received, shutting down gracefully...');
+  
+  if (client) {
+    await client.destroy();
+  }
+  
+  server.close(() => {
+    process.exit(0);
+  });
+});

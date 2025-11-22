@@ -136,5 +136,38 @@
       border: 1px solid #f5c6cb;
     }
   </style>
+  
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    
+    socket.on('connect', () => {
+      console.log('✅ Connected to server');
+    });
+    
+    socket.on('morning_greeting_status', (data) => {
+      console.log('🌅 Morning greeting update:', data);
+      // Show notification or update UI
+      if (data.status === 'voice_sent' || data.status === 'reminder_sent') {
+        const alertBox = document.createElement('div');
+        alertBox.className = 'alert alert-success';
+        alertBox.textContent = '✅ ' + data.message;
+        alertBox.style.position = 'fixed';
+        alertBox.style.top = '20px';
+        alertBox.style.right = '20px';
+        alertBox.style.zIndex = '9999';
+        document.body.appendChild(alertBox);
+        
+        setTimeout(() => {
+          alertBox.remove();
+        }, 5000);
+      }
+    });
+    
+    socket.on('connection_status', (data) => {
+      console.log('📊 Connection status:', data);
+      // You can update UI to show connection status
+    });
+  </script>
 </body>
 </html>
