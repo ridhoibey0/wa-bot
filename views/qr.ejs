@@ -34,8 +34,12 @@
       <div class="qr-container">
         <h2 style="margin-bottom: 20px;">Scan QR Code untuk Login WhatsApp</h2>
         
+        <div id="qr-status" style="margin-bottom: 20px;">
+          <p id="status-text">Loading QR Code...</p>
+        </div>
+        
         <div id="qr-image-container">
-          <img src="/?type=image" alt="WhatsApp QR Code" id="qr-image" style="max-width: 500px;">
+          <!-- QR Code akan muncul di sini -->
         </div>
         
         <div class="qr-info">
@@ -49,21 +53,69 @@
           </ol>
         </div>
 
-        <button onclick="refreshQR()" class="btn-primary" style="margin-top: 20px;">
+        <button onclick="checkQR()" class="btn-primary" style="margin-top: 20px;">
           🔄 Refresh QR Code
         </button>
       </div>
     </main>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
   <script>
-    function refreshQR() {
-      const img = document.getElementById('qr-image');
-      img.src = '/?type=image&t=' + new Date().getTime();
+    let qrCodeObj = null;
+    
+    async function checkQR() {
+      try {
+        const response = await fetch('/api/qr');
+        const data = await response.json();
+        
+        const statusText = document.getElementById('status-text');
+        const qrContainer = document.getElementById('qr-image-container');
+        
+        if (data.status === 'ready' && data.qr) {
+          statusText.textContent = '✅ QR Code Ready - Silakan Scan';
+          statusText.style.color = '#28a745';
+          
+          // Clear previous QR
+          qrContainer.innerHTML = '';
+          
+          // Generate QR Code
+          QRCode.toCanvas(data.qr, { 
+            width: 400,
+            margin: 2,
+            color: {
+              dark: '#000',
+              light: '#fff'
+            }
+          }, function (error, canvas) {
+            if (error) {
+              console.error(error);
+              statusText.textContent = '❌ Error generating QR Code';
+              statusText.style.color = '#dc3545';
+            } else {
+              canvas.style.border = '2px solid #ddd';
+              canvas.style.borderRadius = '10px';
+              canvas.style.maxWidth = '100%';
+              qrContainer.appendChild(canvas);
+            }
+          });
+        } else {
+          statusText.textContent = '⏳ Waiting for QR Code... Bot sedang initialize.';
+          statusText.style.color = '#856404';
+          qrContainer.innerHTML = '<p style="color: #999;">QR Code will appear here once ready...</p>';
+        }
+      } catch (error) {
+        console.error('Error fetching QR:', error);
+        document.getElementById('status-text').textContent = '❌ Error loading QR Code';
+        document.getElementById('status-text').style.color = '#dc3545';
+      }
     }
-
-    // Auto refresh every 30 seconds
-    setInterval(refreshQR, 30000);
+    
+    // Check QR on page load
+    checkQR();
+    
+    // Auto refresh every 5 seconds
+    setInterval(checkQR, 5000);
   </script>
 </body>
 </html>

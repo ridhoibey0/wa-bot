@@ -25,6 +25,9 @@ const MORNING_GROUP_IDS = process.env.MORNING_GROUP_IDS
   : ["120363402403833771@g.us"];
 const MORNING_TIME = process.env.MORNING_TIME || "0 7 * * *"; // Default: 07:00 setiap hari
 
+// Store QR code untuk dashboard
+let currentQRCode = null;
+
 // Express middleware configuration
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
@@ -99,6 +102,14 @@ client.on("ready", () => {
 
 client.on("qr", (qr) => {
   qrcode.generate(qr, { small: true });
+  
+  // Save QR code untuk dashboard
+  currentQRCode = qr;
+  dashboardRoutes.setQRCode(qr);
+  
+  // Save ke file juga (backward compatibility)
+  fs.writeFileSync(path.join(__dirname, "whatsapp.qr"), qr);
+  console.log("[QR Code] QR code telah di-generate dan tersedia di dashboard");
 });
 
 function delay(ms) {

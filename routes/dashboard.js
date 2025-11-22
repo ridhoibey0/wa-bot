@@ -4,6 +4,17 @@ const db = require("../db");
 const fs = require("fs");
 const path = require("path");
 
+// Variable untuk store QR code data
+let latestQRCode = null;
+
+// Function untuk set QR code dari WhatsApp client
+const setQRCode = (qr) => {
+  latestQRCode = qr;
+};
+
+// Export function
+router.setQRCode = setQRCode;
+
 // Middleware untuk check auth (simple, bisa diperbaiki dengan session)
 const isAuthenticated = (req, res, next) => {
   if (req.session && req.session.isAdmin) {
@@ -64,7 +75,19 @@ router.get("/dashboard", isAuthenticated, async (req, res) => {
 
 // QR Code page
 router.get("/qr", isAuthenticated, (req, res) => {
-  res.render("qr", { username: req.session.username });
+  res.render("qr", { 
+    username: req.session.username,
+    qrCode: latestQRCode 
+  });
+});
+
+// API endpoint to get QR code data
+router.get("/api/qr", isAuthenticated, (req, res) => {
+  if (latestQRCode) {
+    res.json({ qr: latestQRCode, status: 'ready' });
+  } else {
+    res.json({ qr: null, status: 'waiting' });
+  }
 });
 
 // Users management

@@ -117,11 +117,18 @@ DB_USER=your_user
 DB_PASSWORD=your_password
 GEMINI_API_KEY=your_gemini_api_key
 
-# ID Grup untuk morning greeting (format: 120363402403833771@g.us)
-MORNING_GROUP_ID=120363402403833771@g.us
+# ID Grup untuk morning greeting (pisahkan dengan koma untuk multiple groups)
+MORNING_GROUP_IDS=120363402403833771@g.us
 # Waktu pengiriman (format cron: menit jam * * *)
 MORNING_TIME=0 7 * * *
+
+# Session secret untuk dashboard (GANTI dengan random string yang aman!)
+SESSION_SECRET=ganti-dengan-random-string-yang-panjang-dan-aman
 ```
+
+**PENTING untuk Production:**
+- Ganti `SESSION_SECRET` dengan string random yang panjang
+- Ganti password default admin di `routes/dashboard.js`
 
 ### 4. Jalankan database migrations
 ```bash
@@ -193,17 +200,27 @@ pm2 startup
 pm2 save
 ```
 
-## Scan QR Code untuk WhatsApp
+## Akses Dashboard & Scan QR Code
 
-### Metode 1: Melalui browser
-1. Akses `http://server_ip:3000` dari browser
-2. Scan QR code yang muncul dengan WhatsApp di HP Anda
+### Akses Dashboard
+1. Buka browser dan akses `http://server_ip:3000` (contoh: `http://178.128.208.9:3000`)
+2. Login dengan credentials:
+   - Username: `admin`
+   - Password: `admin123`
+3. Dashboard akan menampilkan statistik dan menu navigasi
 
-### Metode 2: Melalui SSH terminal
+### Scan QR Code WhatsApp
+**Metode 1: Melalui Dashboard (Recommended)**
+1. Login ke dashboard
+2. Klik menu "📱 QR Code" di sidebar
+3. Scan QR code yang muncul dengan WhatsApp di HP Anda
+4. QR code akan auto-refresh setiap 30 detik
+
+**Metode 2: Melalui SSH terminal**
 1. QR code akan muncul di terminal saat pertama kali dijalankan
 2. Scan QR code tersebut dengan WhatsApp di HP Anda
 
-**Tips:** Jika menggunakan SSH, pastikan terminal Anda mendukung QR code display, atau gunakan metode browser.
+**Tips:** Gunakan dashboard untuk experience yang lebih baik dan mudah.
 
 ## Setup Firewall (Optional tapi Disarankan)
 
@@ -211,7 +228,7 @@ pm2 save
 # Allow SSH
 sudo ufw allow 22/tcp
 
-# Allow port aplikasi
+# Allow port aplikasi (WAJIB untuk akses dashboard dari public)
 sudo ufw allow 3000/tcp
 
 # Enable firewall
@@ -220,6 +237,8 @@ sudo ufw enable
 # Check status
 sudo ufw status
 ```
+
+**PENTING:** Pastikan port 3000 terbuka agar dashboard bisa diakses dari luar!
 
 ## Setup Nginx sebagai Reverse Proxy (Optional)
 
@@ -256,6 +275,9 @@ sudo ln -s /etc/nginx/sites-available/wa-bot /etc/nginx/sites-enabled/
 sudo nginx -t
 sudo systemctl restart nginx
 ```
+
+**Dengan Nginx:** Akses dashboard via `http://your_domain.com` atau `http://178.128.208.9`  
+**Tanpa Nginx:** Akses dashboard via `http://178.128.208.9:3000`
 
 ## Monitoring dan Maintenance
 
