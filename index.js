@@ -208,21 +208,10 @@ async function sendMorningGreeting() {
           continue;
         }
         
-        // Cek apakah chat tersedia
         console.log(`[Morning Greeting] Mencoba mengirim ke ${groupId}...`);
         
-        // Coba fetch chat terlebih dahulu untuk memastikan ada
-        const chat = await client.getChatById(groupId).catch(err => {
-          console.error(`[Morning Greeting] Chat ${groupId} tidak ditemukan:`, err.message);
-          return null;
-        });
-        
-        if (!chat) {
-          console.error(`[Morning Greeting] Grup ${groupId} tidak ditemukan atau bot tidak tergabung di grup tersebut.`);
-          continue;
-        }
-        
-        // Kirim voice note
+        // Langsung kirim tanpa cek chat dulu (lebih reliable)
+        // whatsapp-web.js akan otomatis handle jika grup tidak ada
         await client.sendMessage(groupId, media, {
           sendAudioAsVoice: true
         });
@@ -239,6 +228,10 @@ async function sendMorningGreeting() {
         await delay(2000);
       } catch (err) {
         console.error(`[Morning Greeting] ❌ Error mengirim ke ${groupId}:`, err.message || err);
+        // Log detail error untuk debugging
+        if (err.message.includes('chat not found') || err.message.includes('getChat')) {
+          console.error(`[Morning Greeting] ⚠️ Pastikan bot sudah tergabung di grup ${groupId} dan restart bot setelah join grup baru`);
+        }
       }
     }
     
