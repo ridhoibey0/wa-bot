@@ -6,14 +6,21 @@ const path = require("path");
 
 // Variable untuk store QR code data
 let latestQRCode = null;
+let clientStatus = 'disconnected'; // disconnected, qr, connecting, connected
 
 // Function untuk set QR code dari WhatsApp client
 const setQRCode = (qr) => {
   latestQRCode = qr;
 };
 
+// Function untuk set status client
+const setClientStatus = (status) => {
+  clientStatus = status;
+};
+
 // Export function
 router.setQRCode = setQRCode;
+router.setClientStatus = setClientStatus;
 
 // Middleware untuk check auth (simple, bisa diperbaiki dengan session)
 const isAuthenticated = (req, res, next) => {
@@ -83,10 +90,14 @@ router.get("/qr", isAuthenticated, (req, res) => {
 
 // API endpoint to get QR code data
 router.get("/api/qr", isAuthenticated, (req, res) => {
-  if (latestQRCode) {
-    res.json({ qr: latestQRCode, status: 'ready' });
+  if (clientStatus === 'connected') {
+    res.json({ qr: null, status: 'connected', message: '✅ WhatsApp sudah terkoneksi!' });
+  } else if (clientStatus === 'connecting') {
+    res.json({ qr: null, status: 'connecting', message: '⏳ Sedang menghubungkan...' });
+  } else if (latestQRCode && clientStatus === 'qr') {
+    res.json({ qr: latestQRCode, status: 'qr', message: '📱 Silakan scan QR Code' });
   } else {
-    res.json({ qr: null, status: 'waiting' });
+    res.json({ qr: null, status: 'waiting', message: '⏳ Menunggu QR Code...' });
   }
 });
 

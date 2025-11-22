@@ -27,6 +27,8 @@ const MORNING_TIME = process.env.MORNING_TIME || "0 7 * * *"; // Default: 07:00 
 
 // Store QR code untuk dashboard
 let currentQRCode = null;
+let isClientReady = false;
+let clientStatus = 'disconnected'; // disconnected, qr, connecting, connected
 
 // Express middleware configuration
 app.set("view engine", "ejs");
@@ -96,20 +98,36 @@ function saveData(data) {
 client.on("ready", () => {
   console.log("Client is ready!");
   
+  // Update status koneksi
+  isClientReady = true;
+  clientStatus = 'connected';
+  currentQRCode = null; // Clear QR code setelah connected
+  dashboardRoutes.setQRCode(null);
+  dashboardRoutes.setClientStatus(clientStatus);
+  
   // Setup morning greeting scheduler
   setupMorningGreeting();
 });
 
 client.on("qr", (qr) => {
-  qrcode.generate(qr, { small: true });
-  
-  // Save QR code untuk dashboard
-  currentQRCode = qr;
-  dashboardRoutes.setQRCode(qr);
-  
-  // Save ke file juga (backward compatibility)
-  fs.writeFileSync(path.join(__dirname, "whatsapp.qr"), qr);
-  console.log("[QR Code] QR code telah di-generate dan tersedia di dashboard");
+  // Hanya generate QR jika belum connected
+  if (!isClientReady) {
+    qrcode.generate(qr, { small: true });
+    
+    // Update status
+    clientStatus = 'qr';
+    
+    // Save QR code untuk dashboard
+    currentQRCode = qr;
+    dashboardRoutes.setQRCode(qr);
+    dashboardRoutes.setClientStatus(clientStatus);
+    
+    // Save ke file juga (backward compatibility)
+    fs.writeFileSync(path.join(__dirname, "whatsapp.qr"), qr);
+    console.log("[QR Code] QR code telah di-generate dan tersedia di dashboard");
+  } else {
+    console.log("[QR Code] Client sudah terkoneksi, skip QR generation");
+  }
 });
 
 function delay(ms) {

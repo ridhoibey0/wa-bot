@@ -72,8 +72,17 @@
         const statusText = document.getElementById('status-text');
         const qrContainer = document.getElementById('qr-image-container');
         
-        if (data.status === 'ready' && data.qr) {
-          statusText.textContent = '✅ QR Code Ready - Silakan Scan';
+        // Handle different connection states
+        if (data.status === 'connected') {
+          statusText.textContent = data.message || '✅ WhatsApp sudah terkoneksi!';
+          statusText.style.color = '#28a745';
+          qrContainer.innerHTML = '<div style="padding: 40px; background: #d4edda; border-radius: 10px; color: #155724; text-align: center;"><h3>✅ Bot Sudah Aktif!</h3><p style="margin-top: 10px;">WhatsApp sudah terkoneksi dan siap digunakan.</p><p style="margin-top: 15px; font-size: 14px; opacity: 0.8;">Tidak perlu scan QR lagi.</p></div>';
+        } else if (data.status === 'connecting') {
+          statusText.textContent = data.message || '⏳ Sedang menghubungkan...';
+          statusText.style.color = '#0056b3';
+          qrContainer.innerHTML = '<div style="padding: 40px; color: #0056b3; text-align: center;"><div style="font-size: 40px; margin-bottom: 15px;">🔄</div><p style="font-weight: 600;">Authenticating...</p></div>';
+        } else if (data.status === 'qr' && data.qr) {
+          statusText.textContent = data.message || '📱 Silakan scan QR Code';
           statusText.style.color = '#28a745';
           
           // Clear previous QR
@@ -100,7 +109,7 @@
             }
           });
         } else {
-          statusText.textContent = '⏳ Waiting for QR Code... Bot sedang initialize.';
+          statusText.textContent = data.message || '⏳ Waiting for QR Code...';
           statusText.style.color = '#856404';
           qrContainer.innerHTML = '<p style="color: #999;">QR Code will appear here once ready...</p>';
         }
