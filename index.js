@@ -218,7 +218,6 @@ client.on("message", async (msg) => {
     } catch (err) {
       console.error("Gagal hapus pesan:", err.message || err);
     }
-  }
   } else if (msg.body === "!tagall") {
     await msg.reply("Ok sir");
     const chat = await msg.getChat();
