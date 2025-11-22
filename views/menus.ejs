@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Menus Management - WhatsApp Bot</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="dashboard">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <h2>🤖 WA Bot</h2>
+      <nav>
+        <a href="/dashboard">📊 Dashboard</a>
+        <a href="/qr">📱 QR Code</a>
+        <a href="/users">👥 Users</a>
+        <a href="/menus" class="active">🍽️ Menus</a>
+        <a href="/gathering">🎉 Gathering</a>
+        <a href="/muted">🔇 Muted Users</a>
+      </nav>
+      <a href="/logout" class="logout">🚪 Logout</a>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="header">
+        <h1>Menus Management</h1>
+        <div class="user-info">
+          👤 <strong><%= username %></strong>
+        </div>
+      </div>
+
+      <!-- Add Menu Form -->
+      <div class="table-container" style="margin-bottom: 20px;">
+        <h3 style="margin-bottom: 15px;">➕ Add New Menu</h3>
+        <form action="/menus/add" method="POST" class="form-inline">
+          <input type="text" name="name" placeholder="Nama Menu" required>
+          <input type="number" name="price" placeholder="Harga" required>
+          <button type="submit" class="btn-success">Add Menu</button>
+        </form>
+      </div>
+
+      <!-- Menus Table -->
+      <div class="table-container">
+        <h3 style="margin-bottom: 15px;">📋 All Menus (<%= menus.length %>)</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Nama Menu</th>
+              <th>Harga</th>
+              <th>Created</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (menus.length === 0) { %>
+              <tr>
+                <td colspan="5" style="text-align: center; color: #999;">
+                  Belum ada menu tersedia
+                </td>
+              </tr>
+            <% } else { %>
+              <% menus.forEach(menu => { %>
+                <tr>
+                  <td><%= menu.id %></td>
+                  <td>
+                    <span id="name-<%= menu.id %>"><%= menu.name %></span>
+                    <input type="text" id="edit-name-<%= menu.id %>" value="<%= menu.name %>" style="display: none;">
+                  </td>
+                  <td>
+                    <span id="price-<%= menu.id %>">Rp <%= menu.price.toLocaleString('id-ID') %></span>
+                    <input type="number" id="edit-price-<%= menu.id %>" value="<%= menu.price %>" style="display: none; width: 120px;">
+                  </td>
+                  <td><%= new Date(menu.created_at).toLocaleDateString('id-ID') %></td>
+                  <td>
+                    <button onclick="editMenu(<%= menu.id %>)" id="edit-btn-<%= menu.id %>" class="btn-success btn-sm">Edit</button>
+                    <button onclick="saveMenu(<%= menu.id %>)" id="save-btn-<%= menu.id %>" class="btn-success btn-sm" style="display: none;">Save</button>
+                    <form action="/menus/delete/<%= menu.id %>" method="POST" style="display: inline;" 
+                          onsubmit="return confirm('Yakin ingin hapus menu <%= menu.name %>?')">
+                      <button type="submit" class="btn-danger btn-sm">Delete</button>
+                    </form>
+                  </td>
+                </tr>
+              <% }) %>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    function editMenu(id) {
+      document.getElementById('name-' + id).style.display = 'none';
+      document.getElementById('price-' + id).style.display = 'none';
+      document.getElementById('edit-name-' + id).style.display = 'inline';
+      document.getElementById('edit-price-' + id).style.display = 'inline';
+      document.getElementById('edit-btn-' + id).style.display = 'none';
+      document.getElementById('save-btn-' + id).style.display = 'inline';
+    }
+
+    function saveMenu(id) {
+      const name = document.getElementById('edit-name-' + id).value;
+      const price = document.getElementById('edit-price-' + id).value;
+      
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = '/menus/update/' + id;
+      
+      const nameInput = document.createElement('input');
+      nameInput.type = 'hidden';
+      nameInput.name = 'name';
+      nameInput.value = name;
+      
+      const priceInput = document.createElement('input');
+      priceInput.type = 'hidden';
+      priceInput.name = 'price';
+      priceInput.value = price;
+      
+      form.appendChild(nameInput);
+      form.appendChild(priceInput);
+      document.body.appendChild(form);
+      form.submit();
+    }
+  </script>
+</body>
+</html>

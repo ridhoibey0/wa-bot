@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - WhatsApp Bot</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="dashboard">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <h2>🤖 WA Bot</h2>
+      <nav>
+        <a href="/dashboard" class="active">📊 Dashboard</a>
+        <a href="/qr">📱 QR Code</a>
+        <a href="/users">👥 Users</a>
+        <a href="/menus">🍽️ Menus</a>
+        <a href="/gathering">🎉 Gathering</a>
+        <a href="/muted">🔇 Muted Users</a>
+      </nav>
+      <a href="/logout" class="logout">🚪 Logout</a>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="header">
+        <h1>Dashboard</h1>
+        <div class="user-info">
+          👤 <strong><%= username %></strong>
+        </div>
+      </div>
+
+      <!-- Stats Cards -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <h3>Total Users</h3>
+          <div class="number"><%= stats.totalUsers %></div>
+        </div>
+        
+        <div class="stat-card">
+          <h3>Total Menus</h3>
+          <div class="number"><%= stats.totalMenus %></div>
+        </div>
+        
+        <div class="stat-card">
+          <h3>Total Pilihan</h3>
+          <div class="number"><%= stats.totalChoices %></div>
+        </div>
+        
+        <div class="stat-card">
+          <h3>Sudah Bayar</h3>
+          <div class="number" style="color: #28a745;"><%= stats.paidCount %></div>
+        </div>
+      </div>
+
+      <!-- Quick Actions -->
+      <div class="table-container">
+        <h2 style="margin-bottom: 20px;">Quick Actions</h2>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+          <a href="/qr" class="btn-primary">📱 Scan QR Code</a>
+          <a href="/users" class="btn-primary">👥 Manage Users</a>
+          <a href="/menus" class="btn-primary">🍽️ Manage Menus</a>
+          <a href="/gathering" class="btn-primary">🎉 View Gathering Data</a>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Users Management - WhatsApp Bot</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="dashboard">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <h2>🤖 WA Bot</h2>
+      <nav>
+        <a href="/dashboard">📊 Dashboard</a>
+        <a href="/qr">📱 QR Code</a>
+        <a href="/users" class="active">👥 Users</a>
+        <a href="/menus">🍽️ Menus</a>
+        <a href="/gathering">🎉 Gathering</a>
+        <a href="/muted">🔇 Muted Users</a>
+      </nav>
+      <a href="/logout" class="logout">🚪 Logout</a>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="header">
+        <h1>Users Management</h1>
+        <div class="user-info">
+          👤 <strong><%= username %></strong>
+        </div>
+      </div>
+
+      <!-- Add User Form -->
+      <div class="table-container" style="margin-bottom: 20px;">
+        <h3 style="margin-bottom: 15px;">➕ Add New User</h3>
+        <form action="/users/add" method="POST" class="form-inline">
+          <input type="text" name="name" placeholder="Nama Lengkap" required>
+          <input type="text" name="phone" placeholder="Nomor HP (62xxx)" required>
+          <button type="submit" class="btn-success">Add User</button>
+        </form>
+      </div>
+
+      <!-- Users Table -->
+      <div class="table-container">
+        <h3 style="margin-bottom: 15px;">📋 All Users (<%= users.length %>)</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Nama</th>
+              <th>Phone</th>
+              <th>Registered</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (users.length === 0) { %>
+              <tr>
+                <td colspan="5" style="text-align: center; color: #999;">
+                  Belum ada user terdaftar
+                </td>
+              </tr>
+            <% } else { %>
+              <% users.forEach(user => { %>
+                <tr>
+                  <td><%= user.id %></td>
+                  <td><%= user.name %></td>
+                  <td><%= user.phone %></td>
+                  <td><%= new Date(user.created_at).toLocaleDateString('id-ID') %></td>
+                  <td>
+                    <form action="/users/delete/<%= user.id %>" method="POST" style="display: inline;" 
+                          onsubmit="return confirm('Yakin ingin hapus user <%= user.name %>?')">
+                      <button type="submit" class="btn-danger btn-sm">Delete</button>
+                    </form>
+                  </td>
+                </tr>
+              <% }) %>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

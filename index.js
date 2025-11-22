@@ -1,5 +1,7 @@
 require("dotenv").config();
 const express = require("express");
+const session = require("express-session");
+const bodyParser = require("body-parser");
 const { Client, LocalAuth, Poll, MessageMedia } = require("whatsapp-web.js");
 const fs = require("fs");
 const path = require("path");
@@ -11,13 +13,35 @@ const db = require("./db");
 const qrcode = require("qrcode-terminal");
 const cron = require("node-cron");
 const gtts = require("gtts");
+const dashboardRoutes = require("./routes/dashboard");
 
 const app = express();
 const port = 3000;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const DATA_FILE = path.join(__dirname, "muted.json");
-const MORNING_GROUP_ID = process.env.MORNING_GROUP_ID || "120363402403833771@g.us";
+// Support multiple group IDs separated by comma
+const MORNING_GROUP_IDS = process.env.MORNING_GROUP_IDS 
+  ? process.env.MORNING_GROUP_IDS.split(',').map(id => id.trim())
+  : ["120363402403833771@g.us"];
 const MORNING_TIME = process.env.MORNING_TIME || "0 7 * * *"; // Default: 07:00 setiap hari
+
+// Express middleware configuration
+app.set("view engine", "ejs");
+app.set("views", path.join(__dirname, "views"));
+app.use(express.static(path.join(__dirname, "public")));
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json());
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || "wa-bot-secret-key-change-in-production",
+    resave: false,
+    saveUninitialized: false,
+    cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 }, // 24 hours
+  })
+);
+
+// Dashboard routes
+app.use("/", dashboardRoutes);
 
 const client = new Client({
   authStrategy: new LocalAuth(),
@@ -107,13 +131,22 @@ async function sendMorningGreeting() {
     await generateVoiceNote(greetingText, voiceFilePath);
     console.log("[Morning Greeting] Voice note berhasil di-generate.");
     
-    // Kirim voice note ke grup
+    // Kirim voice note ke semua grup yang terdaftar
     const media = MessageMedia.fromFilePath(voiceFilePath);
-    await client.sendMessage(MORNING_GROUP_ID, media, {
-      sendAudioAsVoice: true
-    });
     
-    console.log(`[Morning Greeting] Voice note berhasil dikirim ke grup ${MORNING_GROUP_ID}`);
+    for (const groupId of MORNING_GROUP_IDS) {
+      try {
+        await client.sendMessage(groupId, media, {
+          sendAudioAsVoice: true
+        });
+        console.log(`[Morning Greeting] Voice note berhasil dikirim ke grup ${groupId}`);
+        
+        // Delay antar grup untuk avoid spam detection
+        await delay(2000);
+      } catch (err) {
+        console.error(`[Morning Greeting] Error mengirim ke ${groupId}:`, err.message);
+      }
+    }
     
     // Hapus file temporary setelah dikirim
     setTimeout(() => {
@@ -131,7 +164,10 @@ async function sendMorningGreeting() {
 // Fungsi untuk setup scheduler morning greeting
 function setupMorningGreeting() {
   console.log(`[Morning Greeting] Scheduler diaktifkan dengan waktu: ${MORNING_TIME}`);
-  console.log(`[Morning Greeting] Target grup: ${MORNING_GROUP_ID}`);
+  console.log(`[Morning Greeting] Target grup (${MORNING_GROUP_IDS.length}):`);
+  MORNING_GROUP_IDS.forEach((id, index) => {
+    console.log(`  ${index + 1}. ${id}`);
+  });
   
   // Schedule task untuk mengirim morning greeting
   cron.schedule(MORNING_TIME, () => {
@@ -183,7 +219,7 @@ client.on("message", async (msg) => {
       console.error("Gagal hapus pesan:", err.message || err);
     }
   }
-  else if (msg.body === "!tagall") {
+  } else if (msg.body === "!tagall") {
     await msg.reply("Ok sir");
     const chat = await msg.getChat();
     let text = "";
@@ -195,6 +231,22 @@ client.on("message", async (msg) => {
     }
 
     await chat.sendMessage(text, { mentions });
+  } else if (msg.body.toLowerCase() === "!groupid" || msg.body.toLowerCase() === "!idgrup") {
+    const chat = await msg.getChat();
+    
+    if (chat.isGroup) {
+      const groupName = chat.name;
+      const groupId = chat.id._serialized;
+      
+      await msg.reply(
+        `📋 *Informasi Grup*\n\n` +
+        `Nama: *${groupName}*\n` +
+        `ID: \`${groupId}\`\n\n` +
+        `Copy ID di atas untuk digunakan di konfigurasi bot.`
+      );
+    } else {
+      await msg.reply("⚠️ Command ini hanya bisa digunakan di grup.");
+    }
 //   } else if (msg.body.toLocaleLowerCase() === "hadir") {
 //     const attendance = await db("attendance").where("user_id", user.id);
 
@@ -907,7 +959,8 @@ client.on("vote_update", (vote) => {
 //   console.log(`Voter name: ${contact.pushname || contact.number}`);
 // });
 
-app.get("/", async (req, res) => {
+// QR Code endpoint - dipindahkan ke dashboard routes, tapi tetap keep ini untuk backward compatibility
+app.get("/qrcode", async (req, res) => {
   let imageType = req.query.type;
   if (imageType === "image") {
     res.setHeader("Content-Type", "image/png");

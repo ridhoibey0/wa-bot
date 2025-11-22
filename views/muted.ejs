@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Muted Users - WhatsApp Bot</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="dashboard">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <h2>🤖 WA Bot</h2>
+      <nav>
+        <a href="/dashboard">📊 Dashboard</a>
+        <a href="/qr">📱 QR Code</a>
+        <a href="/users">👥 Users</a>
+        <a href="/menus">🍽️ Menus</a>
+        <a href="/gathering">🎉 Gathering</a>
+        <a href="/muted" class="active">🔇 Muted Users</a>
+      </nav>
+      <a href="/logout" class="logout">🚪 Logout</a>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="header">
+        <h1>Muted Users Management</h1>
+        <div class="user-info">
+          👤 <strong><%= username %></strong>
+        </div>
+      </div>
+
+      <!-- Muted Users -->
+      <div class="table-container" style="margin-bottom: 20px;">
+        <h3 style="margin-bottom: 15px;">🔇 Currently Muted Users (<%= mutedUsers.length %>)</h3>
+        <% if (mutedUsers.length === 0) { %>
+          <p style="color: #999; text-align: center; padding: 20px;">
+            Tidak ada user yang di-mute
+          </p>
+        <% } else { %>
+          <table>
+            <thead>
+              <tr>
+                <th>User ID</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% mutedUsers.forEach(userId => { %>
+                <tr>
+                  <td><%= userId %></td>
+                  <td>
+                    <form action="/muted/remove" method="POST" style="display: inline;">
+                      <input type="hidden" name="userId" value="<%= userId %>">
+                      <button type="submit" class="btn-success btn-sm">Unmute</button>
+                    </form>
+                  </td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        <% } %>
+      </div>
+
+      <!-- Deleted Messages Log -->
+      <div class="table-container">
+        <h3 style="margin-bottom: 15px;">📜 Deleted Messages Log (Last 50)</h3>
+        <% if (logs.length === 0) { %>
+          <p style="color: #999; text-align: center; padding: 20px;">
+            Belum ada pesan yang dihapus
+          </p>
+        <% } else { %>
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Author</th>
+                <th>Message</th>
+                <th>Group</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% logs.forEach(log => { %>
+                <tr>
+                  <td><%= new Date(log.time).toLocaleString('id-ID') %></td>
+                  <td><%= log.author || 'Unknown' %></td>
+                  <td style="max-width: 300px; word-wrap: break-word;"><%= log.body %></td>
+                  <td><%= log.group %></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        <% } %>
+      </div>
+
+      <!-- Info -->
+      <div class="table-container" style="margin-top: 20px;">
+        <h3 style="margin-bottom: 15px;">ℹ️ Cara Menggunakan</h3>
+        <p style="color: #666;">
+          • Untuk mute user: Reply pesan user di grup dengan command <code>silent him</code><br>
+          • Untuk unmute user: Reply pesan user di grup dengan command <code>unsilent him</code> atau gunakan tombol di atas<br>
+          • Pesan dari user yang di-mute akan otomatis dihapus dan dicatat di log
+        </p>
+      </div>
+    </main>
+  </div>
+</body>
+</html>
