@@ -25,6 +25,35 @@ const MORNING_GROUP_IDS = process.env.MORNING_GROUP_IDS
   : ["120363402403833771@g.us"];
 const MORNING_TIME = process.env.MORNING_TIME || "0 7 * * *"; // Default: 07:00 setiap hari
 
+// Group IDs yang akan menerima pesan tambahan setelah voice note
+const MORNING_EXTRA_MESSAGE_GROUP_IDS = process.env.MORNING_EXTRA_MESSAGE_GROUP_IDS
+  ? process.env.MORNING_EXTRA_MESSAGE_GROUP_IDS.split(',').map(id => id.trim())
+  : [];
+
+// Pesan tambahan untuk grup tertentu
+const MORNING_EXTRA_MESSAGE = `📢 *REMINDER PEMBAYARAN* 📢
+
+⚠️ Mengingatkan yang merasa belum bayar sama sekali
+
+💰 *KEWAJIBAN BULANAN:*
+Dalam sebulan per orang harus masuk *100k*
+
+👕 *JAHIM:* 330k (S-XXL) untuk bulan November
+   • Boleh dicicil
+   • Size XXXL +15rb
+   • *Total: 330k*
+
+💼 *KAS ANGKATAN:* 15k/bulan
+   • Boleh nyicil
+
+🏦 *TRANSFER KE:*
+*BCA 1381309415*
+a/n *Sugesty Ibnaty Wadiaturabby*
+
+⚠️ Aku ga punya dana ya 🙏🏻
+
+Terima kasih atas perhatiannya! 🙏`;
+
 // Store QR code untuk dashboard
 let currentQRCode = null;
 let isClientReady = false;
@@ -198,6 +227,13 @@ async function sendMorningGreeting() {
           sendAudioAsVoice: true
         });
         console.log(`[Morning Greeting] ✅ Voice note berhasil dikirim ke grup ${groupId}`);
+        
+        // Kirim pesan tambahan jika grup ini termasuk dalam daftar extra message
+        if (MORNING_EXTRA_MESSAGE && MORNING_EXTRA_MESSAGE_GROUP_IDS.includes(groupId)) {
+          await delay(2000); // Delay sebelum kirim pesan text
+          await client.sendMessage(groupId, MORNING_EXTRA_MESSAGE);
+          console.log(`[Morning Greeting] ✅ Pesan reminder berhasil dikirim ke grup ${groupId}`);
+        }
         
         // Delay antar grup untuk avoid spam detection
         await delay(2000);
