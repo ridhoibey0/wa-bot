@@ -49,7 +49,9 @@ app.use(
 app.use("/", dashboardRoutes);
 
 const client = new Client({
-  authStrategy: new LocalAuth(),
+  authStrategy: new LocalAuth({
+    clientId: "ridho-wa", // folder session unik
+  }),
   puppeteer: {
     headless: true,
     args: [
