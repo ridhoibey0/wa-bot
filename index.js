@@ -340,7 +340,7 @@ function setupMorningGreeting() {
 
 client.on("message", async (msg) => {
   let senderId;
-  let myNumber = ["5544836391092@lid", "6287802337554@c.us"];
+  let myNumber = ["5544836391092@lid", "6287802337554@c.us", "14091921944658@lid", "6282315629089@c.us"];
     const data = loadData();
   if (msg.from.endsWith("@g.us")) {
     senderId = msg.author;
