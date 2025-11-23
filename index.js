@@ -596,9 +596,9 @@ Be helpful, concise, and a little bit witty, but always loyal..`,
       );
     }
   }  else if (msg.body === "silent him") {
-  // cek kalau yang jalanin command adalah kamu sendiri
-  if (!myNumber.includes(senderId)) {
-    await msg.reply("Only Ridho can use this feature.");
+  // cek kalau yang jalanin command adalah admin
+  if (!isAdmin) {
+    await msg.reply("Only admins can use this feature.");
     return;
   }
 
@@ -637,9 +637,9 @@ Be helpful, concise, and a little bit witty, but always loyal..`,
     await msg.reply(`⚠️ ${contact.pushname || contact.number} is already muted.`);
   }
 } else if (msg.body === "unsilent him") {
-  // cek kalau yang jalanin command adalah kamu sendiri
-  if (!myNumber.includes(senderId)) {
-    await msg.reply("Only Ridho can use this feature.");
+  // cek kalau yang jalanin command adalah admin
+  if (!isAdmin) {
+    await msg.reply("Only admins can use this feature.");
     return;
   }
   const chat = await msg.getChat();
@@ -672,9 +672,9 @@ Be helpful, concise, and a little bit witty, but always loyal..`,
     await msg.reply(`⚠️ ${contact.pushname || contact.number} is not muted.`);
   }
 } else if (msg.body === "kick him") {
-  // cek kalau yang jalanin command adalah kamu sendiri
-  if (!myNumber.includes(senderId)) {
-    await msg.reply("Only Ridho can use this feature.");
+  // cek kalau yang jalanin command adalah admin
+  if (!isAdmin) {
+    await msg.reply("Only admins can use this feature.");
     return;
   }
   const chat = await msg.getChat();
