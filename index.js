@@ -223,7 +223,7 @@ async function generateVoiceNote(text, filePath) {
 }
 
 // Fungsi untuk mengirim morning greeting
-async function sendMorningGreeting() {
+async function sendMorningGreeting(greetingText = "Selamat pagi semuanya") {
   try {
     console.log("[Morning Greeting] Memulai proses pengiriman...");
     
@@ -234,7 +234,6 @@ async function sendMorningGreeting() {
     }
     
     const voiceFilePath = path.join(__dirname, "morning_greeting.mp3");
-    const greetingText = "Selamat pagi semuanya";
     
     // Generate voice note
     await generateVoiceNote(greetingText, voiceFilePath);
@@ -316,11 +315,21 @@ function setupMorningGreeting() {
   // Schedule task untuk mengirim morning greeting
   cron.schedule(MORNING_TIME, () => {
     console.log("[Morning Greeting] Waktunya mengirim greeting!");
-    sendMorningGreeting();
+    sendMorningGreeting("Selamat pagi semuanya");
   }, {
     timezone: "Asia/Jakarta" // Sesuaikan dengan timezone Anda
   });
-  
+
+  // Schedule task untuk mengirim afternoon greeting
+  const MORNING_TIME_AFTERNOON = process.env.MORNING_TIME_AFTERNOON || "0 17 * * *"; // Default: 17:00 setiap hari
+  console.log(`[Morning Greeting] Scheduler afternoon diaktifkan dengan waktu: ${MORNING_TIME_AFTERNOON}`);
+  cron.schedule(MORNING_TIME_AFTERNOON, () => {
+    console.log("[Morning Greeting] Waktunya mengirim greeting afternoon!");
+    sendMorningGreeting("Selamat sore semuanya");
+  }, {
+    timezone: "Asia/Jakarta" // Sesuaikan dengan timezone Anda
+  });
+
   console.log("[Morning Greeting] Scheduler berhasil disetup!");
 }
 
