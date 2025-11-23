@@ -490,8 +490,8 @@ client.on("message", async (msg) => {
     }
   } else if (msg.hasMedia && msg.body.startsWith("do")) {
   // Hanya proses jika pengirim adalah Anda
-  if (isAdmin) {
-    await msg.reply("Only ridho can use this feature.");
+  if (!isAdmin) {
+    await msg.reply("Only admins can use this feature.");
     return;
   }
 
