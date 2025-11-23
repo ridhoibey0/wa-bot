@@ -129,9 +129,14 @@ const saveLastMessage = async (phone, messages) => {
 
 function loadData() {
   if (!fs.existsSync(DATA_FILE)) {
-    fs.writeFileSync(DATA_FILE, JSON.stringify({ muted: [], log: [] }, null, 2));
+    fs.writeFileSync(DATA_FILE, JSON.stringify({ muted: [], log: [], admins: [] }, null, 2));
   }
-  return JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
+  const data = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
+  // Ensure admins array exists
+  if (!data.admins) {
+    data.admins = [];
+  }
+  return data;
 }
 
 // helper save data
@@ -342,7 +347,8 @@ client.on("message", async (msg) => {
   } else {
     senderId = msg.from;
   }
-  const isAdmin = myNumber.includes(senderId);
+  // Check if user is admin (original admin or added via allow him)
+  const isAdmin = myNumber.includes(senderId) || (data.admins && data.admins.includes(senderId));
   // const phoneNumber = senderId.split("@")[0];
   // const user = await db("users").where({ phone: phoneNumber }).first();
 
@@ -691,6 +697,119 @@ Be helpful, concise, and a little bit witty, but always loyal..`,
     console.error("Failed to kick member:", err);
     await msg.reply("❌ Failed to kick the member. Make sure I have admin rights.");
   }
+} else if (msg.body === "allow him") {
+  // Only main admin (Ridho) can grant admin access
+  if (!myNumber.includes(senderId)) {
+    await msg.reply("Only Ridho can use this feature.");
+    return;
+  }
+  
+  const chat = await msg.getChat();
+  if (!chat.isGroup) {
+    return msg.reply("This command can only be used in groups.");
+  }
+  
+  const quotedMsg = await msg.getQuotedMessage();
+  if (!quotedMsg) {
+    return msg.reply("Please reply to a message to grant admin access to the sender.");
+  }
+  
+  const targetId = quotedMsg.author || quotedMsg.from;
+  const contact = await client.getContactById(targetId);
+  if (!contact) {
+    return msg.reply("Failed to get contact information.");
+  }
+  
+  // Load current data
+  const fs = require("fs");
+  const path = require("path");
+  const DATA_FILE = path.join(__dirname, "muted.json");
+  
+  let data = { muted: [], log: [], admins: [] };
+  if (fs.existsSync(DATA_FILE)) {
+    data = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
+    if (!data.admins) data.admins = [];
+  }
+  
+  if (!data.admins.includes(targetId)) {
+    data.admins.push(targetId);
+    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+    await msg.reply(`✅ ${contact.pushname || contact.number} has been granted admin access.`);
+  } else {
+    await msg.reply(`⚠️ ${contact.pushname || contact.number} already has admin access.`);
+  }
+} else if (msg.body === "revoke him") {
+  // Only main admin (Ridho) can revoke admin access
+  if (!myNumber.includes(senderId)) {
+    await msg.reply("Only Ridho can use this feature.");
+    return;
+  }
+  
+  const chat = await msg.getChat();
+  if (!chat.isGroup) {
+    return msg.reply("This command can only be used in groups.");
+  }
+  
+  const quotedMsg = await msg.getQuotedMessage();
+  if (!quotedMsg) {
+    return msg.reply("Please reply to a message to revoke admin access from the sender.");
+  }
+  
+  const targetId = quotedMsg.author || quotedMsg.from;
+  const contact = await client.getContactById(targetId);
+  if (!contact) {
+    return msg.reply("Failed to get contact information.");
+  }
+  
+  // Load current data
+  const fs = require("fs");
+  const path = require("path");
+  const DATA_FILE = path.join(__dirname, "muted.json");
+  
+  let data = { muted: [], log: [], admins: [] };
+  if (fs.existsSync(DATA_FILE)) {
+    data = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
+    if (!data.admins) data.admins = [];
+  }
+  
+  if (data.admins.includes(targetId)) {
+    data.admins = data.admins.filter((id) => id !== targetId);
+    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+    await msg.reply(`✅ Admin access revoked from ${contact.pushname || contact.number}.`);
+  } else {
+    await msg.reply(`⚠️ ${contact.pushname || contact.number} does not have admin access.`);
+  }
+} else if (msg.body === "list admins") {
+  // Only main admin can see admin list
+  if (!myNumber.includes(senderId)) {
+    await msg.reply("Only Ridho can use this feature.");
+    return;
+  }
+  
+  const fs = require("fs");
+  const path = require("path");
+  const DATA_FILE = path.join(__dirname, "muted.json");
+  
+  let data = { muted: [], log: [], admins: [] };
+  if (fs.existsSync(DATA_FILE)) {
+    data = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
+  }
+  
+  if (!data.admins || data.admins.length === 0) {
+    return msg.reply("📋 No additional admins have been added.");
+  }
+  
+  let adminList = "👥 *Admin List:*\n\n";
+  for (let i = 0; i < data.admins.length; i++) {
+    try {
+      const contact = await client.getContactById(data.admins[i]);
+      adminList += `${i + 1}. ${contact.pushname || contact.number}\n`;
+    } catch (err) {
+      adminList += `${i + 1}. ${data.admins[i]}\n`;
+    }
+  }
+  
+  await msg.reply(adminList);
 }
 
 
