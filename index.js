@@ -810,6 +810,10 @@ Be helpful, concise, and a little bit witty, but always loyal..`,
   }
   
   await msg.reply(adminList);
+} else if (msg.body === "!sticker" && msg.hasMedia) {
+      const media = await msg.downloadMedia();
+      const stickerMedia = new MessageMedia(media.mimetype, media.data, "sticker");
+      await msg.reply(stickerMedia, undefined, { sendMediaAsSticker: true });
 }
 
 
