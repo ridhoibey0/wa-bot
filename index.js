@@ -810,10 +810,28 @@ Be helpful, concise, and a little bit witty, but always loyal..`,
   }
   
   await msg.reply(adminList);
-} else if (msg.body === "!sticker" && msg.hasMedia) {
-      const media = await msg.downloadMedia();
-      const stickerMedia = new MessageMedia(media.mimetype, media.data, "sticker");
-      await msg.reply(stickerMedia, undefined, { sendMediaAsSticker: true });
+} else if (msg.body === "!sticker") {
+  // Support quoted message for sticker creation
+    if(msg.hasMedia || msg.hasQuotedMsg) {
+      let mediaMessage;
+      if (msg.hasQuotedMsg) {
+        const quotedMsg = await msg.getQuotedMessage();
+        mediaMessage = quotedMsg;
+      }
+      else {
+        mediaMessage = msg;
+      }
+
+      const media = await mediaMessage.downloadMedia();
+      if (media) {
+        const stickerMedia = new MessageMedia(media.mimetype, media.data, media.filename);
+        await client.sendMessage(msg.from, stickerMedia, { sendMediaAsSticker: true });
+      } else {
+        await msg.reply("Failed to download media for sticker.");
+      }
+    } else {
+      await msg.reply("Please send or reply to an image/video to create a sticker.");
+    }
 }
 
 
