@@ -1097,27 +1097,27 @@ Be helpful, concise, and a little bit witty, but always loyal..`,
 //   }
 });
 
-// client.on("message_revoke_everyone", async (after, before) => {
-//   // Pastikan before ada dan berasal dari grup
-//   if (before && before.from.endsWith("@g.us")) {
-//     const chatId = before.from; // ID grup
-//     const senderId = before.author || before.id.participant; // Pengirim pesan asli
+client.on("message_revoke_everyone", async (after, before) => {
+  // Pastikan before ada dan berasal dari grup
+  if (before && before.from.endsWith("@g.us")) {
+    const chatId = before.from; // ID grup
+    const senderId = before.author || before.id.participant; // Pengirim pesan asli
 
-//     const chat = await before.getChat();
-//     const contact = await client.getContactById(senderId);
+    const chat = await before.getChat();
+    const contact = await client.getContactById(senderId);
 
-//     const message = `*Deleted message*\n\n👤 *Sender:* ${
-//       contact.pushname || senderId
-//     }\n *Message:* ${before.body}`;
+    const message = `*Deleted message*\n\n👤 *Sender:* ${
+      contact.pushname || senderId
+    }\n *Message:* ${before.body}`;
 
-//     await client.sendMessage(chatId, message);
-//     console.log(
-//       `[Deleted in group ${chat.name}] ${contact.pushname || senderId}: ${
-//         before.body
-//       }`
-//     );
-//   }
-// });
+    await client.sendMessage(chatId, message);
+    console.log(
+      `[Deleted in group ${chat.name}] ${contact.pushname || senderId}: ${
+        before.body
+      }`
+    );
+  }
+});
 
 client.on("group_join", async (notification) => {
   try {
