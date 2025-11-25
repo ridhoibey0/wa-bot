@@ -1103,19 +1103,25 @@ client.on("message_revoke_everyone", async (after, before) => {
     const chatId = before.from; // ID grup
     const senderId = before.author || before.id.participant; // Pengirim pesan asli
 
-    const chat = await before.getChat();
-    const contact = await client.getContactById(senderId);
+    try {
+      const chat = await before.getChat();
+      
+      // Try to get contact info, fallback to sender ID if failed
+      let senderName = senderId.split('@')[0];
+      try {
+        const contact = await client.getContactById(senderId);
+        senderName = contact.pushname || contact.number || senderName;
+      } catch (err) {
+        console.log('Could not get contact info for deleted message sender:', err.message);
+      }
 
-    const message = `*Deleted message*\n\n👤 *Sender:* ${
-      contact.pushname || senderId
-    }\n *Message:* ${before.body}`;
+      const message = `*Deleted message*\n\n👤 *Sender:* ${senderName}\n📝 *Message:* ${before.body || '(Media/Sticker)'}`;
 
-    await client.sendMessage(chatId, message);
-    console.log(
-      `[Deleted in group ${chat.name}] ${contact.pushname || senderId}: ${
-        before.body
-      }`
-    );
+      await client.sendMessage(chatId, message);
+      console.log(`[Deleted in group ${chat.name}] ${senderName}: ${before.body || '(Media)'}`);
+    } catch (error) {
+      console.error('Error handling deleted message:', error.message);
+    }
   }
 });
 
