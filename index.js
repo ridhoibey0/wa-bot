@@ -1198,6 +1198,34 @@ client.on("message_revoke_everyone", async (after, before) => {
   }
 });
 
+client.on("message_edit", async (message, newBody, prevBody) => {
+  // Only track edits in groups
+  if (message.from.endsWith("@g.us")) {
+    const chatId = message.from;
+    const senderId = message.author || message.from;
+
+    try {
+      const chat = await message.getChat();
+      
+      // Try to get contact info, fallback to sender ID if failed
+      let senderName = senderId.split('@')[0];
+      try {
+        const contact = await client.getContactById(senderId);
+        senderName = contact.pushname || contact.number || senderName;
+      } catch (err) {
+        console.log('Could not get contact info for edited message sender:', err.message);
+      }
+
+      const notificationMessage = `*Edited message*\n\n *Sender:* ${senderName}\n\n *Previous:* ${prevBody || '(empty)'}\n *New:* ${newBody || '(empty)'}`;
+
+      await client.sendMessage(chatId, notificationMessage);
+      console.log(`[Edited in group ${chat.name}] ${senderName}: "${prevBody}" → "${newBody}"`);
+    } catch (error) {
+      console.error('Error handling edited message:', error.message);
+    }
+  }
+});
+
 client.on("group_join", async (notification) => {
   try {
     const chat = await notification.getChat();
