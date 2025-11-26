@@ -38,6 +38,25 @@ const MORNING_GROUP_IDS = process.env.MORNING_GROUP_IDS
   : ["120363402403833771@g.us"];
 const MORNING_TIME = process.env.MORNING_TIME || "0 7 * * *"; // Default: 07:00 setiap hari
 
+// Multi-language greetings
+const GREETINGS = {
+  morning: {
+    id: "Selamat pagi semuanya",
+    en: "Good morning everyone",
+    su: "Wilujeng énjing sadayana", // Sunda
+    jv: "Sugeng enjing sedoyo" // Jawa
+  },
+  afternoon: {
+    id: "Selamat sore semuanya",
+    en: "Good afternoon everyone",
+    su: "Wilujeng sonten sadayana", // Sunda
+    jv: "Sugeng sonten sedoyo" // Jawa
+  }
+};
+
+// Language rotation mode: 'rotate' or 'random'
+const LANGUAGE_MODE = process.env.LANGUAGE_MODE || "rotate"; // rotate = bergiliran, random = acak
+
 // Group IDs yang akan menerima pesan tambahan setelah voice note
 const MORNING_EXTRA_MESSAGE_GROUP_IDS = process.env.MORNING_EXTRA_MESSAGE_GROUP_IDS
   ? process.env.MORNING_EXTRA_MESSAGE_GROUP_IDS.split(',').map(id => id.trim())
@@ -129,12 +148,21 @@ const saveLastMessage = async (phone, messages) => {
 
 function loadData() {
   if (!fs.existsSync(DATA_FILE)) {
-    fs.writeFileSync(DATA_FILE, JSON.stringify({ muted: [], log: [], admins: [] }, null, 2));
+    fs.writeFileSync(DATA_FILE, JSON.stringify({ 
+      muted: [], 
+      log: [], 
+      admins: [],
+      languageIndex: 0 // Track current language index for rotation
+    }, null, 2));
   }
   const data = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
   // Ensure admins array exists
   if (!data.admins) {
     data.admins = [];
+  }
+  // Ensure languageIndex exists
+  if (data.languageIndex === undefined) {
+    data.languageIndex = 0;
   }
   return data;
 }
@@ -228,9 +256,9 @@ async function generateVoiceNote(text, filePath) {
 }
 
 // Fungsi untuk mengirim morning greeting
-async function sendMorningGreeting(greetingText = "Selamat pagi semuanya") {
+async function sendMorningGreeting(greetingType = "morning") {
   try {
-    console.log("[Morning Greeting] Memulai proses pengiriman...");
+    console.log(`[Morning Greeting] Memulai proses pengiriman ${greetingType}...`);
     
     // Cek apakah client sudah ready
     if (!isClientReady) {
@@ -238,11 +266,32 @@ async function sendMorningGreeting(greetingText = "Selamat pagi semuanya") {
       return;
     }
     
+    // Load data untuk language rotation
+    const data = loadData();
+    const languages = ['id', 'en', 'su', 'jv'];
+    let selectedLang;
+    
+    if (LANGUAGE_MODE === 'random') {
+      // Mode random: pilih bahasa acak
+      selectedLang = languages[Math.floor(Math.random() * languages.length)];
+      console.log(`[Morning Greeting] Mode: Random, Bahasa terpilih: ${selectedLang}`);
+    } else {
+      // Mode rotate: bergiliran berdasarkan languageIndex
+      selectedLang = languages[data.languageIndex % languages.length];
+      console.log(`[Morning Greeting] Mode: Rotate, Bahasa terpilih: ${selectedLang} (index: ${data.languageIndex})`);
+      
+      // Update index untuk hari berikutnya
+      data.languageIndex = (data.languageIndex + 1) % languages.length;
+      saveData(data);
+    }
+    
+    // Get greeting text berdasarkan bahasa yang dipilih
+    const greetingText = GREETINGS[greetingType][selectedLang];
     const voiceFilePath = path.join(__dirname, "morning_greeting.mp3");
     
     // Generate voice note
     await generateVoiceNote(greetingText, voiceFilePath);
-    console.log("[Morning Greeting] Voice note berhasil di-generate.");
+    console.log(`[Morning Greeting] Voice note berhasil di-generate (${selectedLang}): "${greetingText}"`);
     
     // Kirim voice note ke semua grup yang terdaftar
     const media = MessageMedia.fromFilePath(voiceFilePath);
@@ -262,13 +311,14 @@ async function sendMorningGreeting(greetingText = "Selamat pagi semuanya") {
         await client.sendMessage(groupId, media, {
           sendAudioAsVoice: true
         });
-        console.log(`[Morning Greeting] ✅ Voice note berhasil dikirim ke grup ${groupId}`);
+        console.log(`[Morning Greeting] ✅ Voice note berhasil dikirim ke grup ${groupId} (${selectedLang})`);
         
         // Emit real-time update
         socketManager.emitMorningGreetingStatus({
           groupId,
           status: 'voice_sent',
-          message: `Voice note berhasil dikirim ke grup ${groupId}`
+          language: selectedLang,
+          message: `Voice note (${selectedLang}) berhasil dikirim ke grup ${groupId}`
         });
         
         // Kirim pesan tambahan jika grup ini termasuk dalam daftar extra message
@@ -312,6 +362,7 @@ async function sendMorningGreeting(greetingText = "Selamat pagi semuanya") {
 // Fungsi untuk setup scheduler morning greeting
 function setupMorningGreeting() {
   console.log(`[Morning Greeting] Scheduler diaktifkan dengan waktu: ${MORNING_TIME}`);
+  console.log(`[Morning Greeting] Language Mode: ${LANGUAGE_MODE} (rotate = bergiliran, random = acak)`);
   console.log(`[Morning Greeting] Target grup (${MORNING_GROUP_IDS.length}):`);
   MORNING_GROUP_IDS.forEach((id, index) => {
     console.log(`  ${index + 1}. ${id}`);
@@ -319,8 +370,8 @@ function setupMorningGreeting() {
   
   // Schedule task untuk mengirim morning greeting
   cron.schedule(MORNING_TIME, () => {
-    console.log("[Morning Greeting] Waktunya mengirim greeting!");
-    sendMorningGreeting("Selamat pagi semuanya");
+    console.log("[Morning Greeting] Waktunya mengirim greeting pagi!");
+    sendMorningGreeting("morning");
   }, {
     timezone: "Asia/Jakarta" // Sesuaikan dengan timezone Anda
   });
@@ -329,8 +380,8 @@ function setupMorningGreeting() {
   const MORNING_TIME_AFTERNOON = process.env.MORNING_TIME_AFTERNOON || "0 17 * * *"; // Default: 17:00 setiap hari
   console.log(`[Morning Greeting] Scheduler afternoon diaktifkan dengan waktu: ${MORNING_TIME_AFTERNOON}`);
   cron.schedule(MORNING_TIME_AFTERNOON, () => {
-    console.log("[Morning Greeting] Waktunya mengirim greeting afternoon!");
-    sendMorningGreeting("Selamat sore semuanya");
+    console.log("[Morning Greeting] Waktunya mengirim greeting sore!");
+    sendMorningGreeting("afternoon");
   }, {
     timezone: "Asia/Jakarta" // Sesuaikan dengan timezone Anda
   });
