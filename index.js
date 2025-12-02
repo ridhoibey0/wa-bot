@@ -1189,8 +1189,15 @@ client.on("message_revoke_everyone", async (after, before) => {
       }
 
       const message = `*Deleted message*\n\n👤 *Sender:* ${senderName}\n📝 *Message:* ${before.body || '(Media/Sticker)'}`;
-
+      const img = before.hasMedia ? await before.downloadMedia() : null;
+      const sticker = MessageMedia.fromFilePath("./delete.png");
+      await client.sendMessage(chatId, sticker, {sendMediaAsSticker: true});
+      if (img) {
+        const mediaMsg = new MessageMedia(img.mimetype, img.data, img.filename);
+        await client.sendMessage(chatId, mediaMsg, { caption: message });
+      } else {
       await client.sendMessage(chatId, message);
+      }
       console.log(`[Deleted in group ${chat.name}] ${senderName}: ${before.body || '(Media)'}`);
     } catch (error) {
       console.error('Error handling deleted message:', error.message);
