@@ -38,19 +38,39 @@ const MORNING_GROUP_IDS = process.env.MORNING_GROUP_IDS
   : ["120363402403833771@g.us"];
 const MORNING_TIME = process.env.MORNING_TIME || "0 7 * * *"; // Default: 07:00 setiap hari
 
-// Multi-language greetings
+// Multi-language greetings dengan support GTTS
 const GREETINGS = {
   morning: {
-    id: "Selamat pagi semuanya",
-    en: "Good morning everyone",
-    su: "Wilujeng énjing sadayana", // Sunda
-    jv: "Sugeng enjing sedoyo" // Jawa
+    id: { text: "Selamat pagi semuanya", lang: "id" },
+    en: { text: "Good morning everyone", lang: "en" },
+    su: { text: "Wilujeng énjing sadayana", lang: "id" }, // Sunda (use Indonesian voice)
+    jv: { text: "Sugeng enjing sedoyo", lang: "id" }, // Jawa (use Indonesian voice)
+    ar: { text: "صباح الخير للجميع", lang: "ar" }, // Arab
+    zh: { text: "大家早上好", lang: "zh-CN" }, // Mandarin
+    ja: { text: "みなさんおはようございます", lang: "ja" }, // Jepang
+    ko: { text: "여러분 좋은 아침입니다", lang: "ko" }, // Korea
+    fr: { text: "Bonjour à tous", lang: "fr" }, // Perancis
+    es: { text: "Buenos días a todos", lang: "es" }, // Spanyol
+    de: { text: "Guten Morgen allerseits", lang: "de" }, // Jerman
+    pt: { text: "Bom dia a todos", lang: "pt" }, // Portugis
+    ru: { text: "Доброе утро всем", lang: "ru" }, // Rusia
+    hi: { text: "सभी को सुप्रभात", lang: "hi" } // Hindi
   },
   afternoon: {
-    id: "Selamat sore semuanya",
-    en: "Good afternoon everyone",
-    su: "Wilujeng sonten sadayana", // Sunda
-    jv: "Sugeng sonten sedoyo" // Jawa
+    id: { text: "Selamat sore semuanya", lang: "id" },
+    en: { text: "Good afternoon everyone", lang: "en" },
+    su: { text: "Wilujeng sonten sadayana", lang: "id" }, // Sunda
+    jv: { text: "Sugeng sonten sedoyo", lang: "id" }, // Jawa
+    ar: { text: "مساء الخير للجميع", lang: "ar" }, // Arab
+    zh: { text: "大家下午好", lang: "zh-CN" }, // Mandarin
+    ja: { text: "みなさんこんにちは", lang: "ja" }, // Jepang
+    ko: { text: "여러분 좋은 오후입니다", lang: "ko" }, // Korea
+    fr: { text: "Bon après-midi à tous", lang: "fr" }, // Perancis
+    es: { text: "Buenas tardes a todos", lang: "es" }, // Spanyol
+    de: { text: "Guten Tag allerseits", lang: "de" }, // Jerman
+    pt: { text: "Boa tarde a todos", lang: "pt" }, // Portugis
+    ru: { text: "Добрый день всем", lang: "ru" }, // Rusia
+    hi: { text: "सभी को शुभ दोपहर", lang: "hi" } // Hindi
   }
 };
 
@@ -241,10 +261,10 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// Fungsi untuk generate voice note dari text
-async function generateVoiceNote(text, filePath) {
+// Fungsi untuk generate voice note dari text dengan support multi-language
+async function generateVoiceNote(text, filePath, lang = "id") {
   return new Promise((resolve, reject) => {
-    const speech = new gtts(text, "id"); // "id" untuk bahasa Indonesia
+    const speech = new gtts(text, lang);
     speech.save(filePath, (err) => {
       if (err) {
         reject(err);
@@ -268,7 +288,7 @@ async function sendMorningGreeting(greetingType = "morning") {
     
     // Load data untuk language rotation
     const data = loadData();
-    const languages = ['id', 'en', 'su', 'jv'];
+    const languages = ['id', 'en', 'su', 'jv', 'ar', 'zh', 'ja', 'ko', 'fr', 'es', 'de', 'pt', 'ru', 'hi'];
     let selectedLang;
     
     if (LANGUAGE_MODE === 'random') {
@@ -285,12 +305,14 @@ async function sendMorningGreeting(greetingType = "morning") {
       saveData(data);
     }
     
-    // Get greeting text berdasarkan bahasa yang dipilih
-    const greetingText = GREETINGS[greetingType][selectedLang];
+    // Get greeting object berdasarkan bahasa yang dipilih
+    const greetingObj = GREETINGS[greetingType][selectedLang];
+    const greetingText = greetingObj.text;
+    const greetingLang = greetingObj.lang;
     const voiceFilePath = path.join(__dirname, "morning_greeting.mp3");
     
-    // Generate voice note
-    await generateVoiceNote(greetingText, voiceFilePath);
+    // Generate voice note dengan bahasa yang sesuai
+    await generateVoiceNote(greetingText, voiceFilePath, greetingLang);
     console.log(`[Morning Greeting] Voice note berhasil di-generate (${selectedLang}): "${greetingText}"`);
     
     // Kirim voice note ke semua grup yang terdaftar
