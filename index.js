@@ -32,6 +32,7 @@ const port = 3000;
 socketManager.setSocketIO(io);
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const DATA_FILE = path.join(__dirname, "muted.json");
+const MY_PERSONAL_NUMBER = process.env.MY_PERSONAL_NUMBER || "6287802337554@c.us"; // Nomor pribadi untuk menerima forward DM
 // Support multiple group IDs separated by comma
 const MORNING_GROUP_IDS = process.env.MORNING_GROUP_IDS 
   ? process.env.MORNING_GROUP_IDS.split(',').map(id => id.trim())
@@ -172,7 +173,8 @@ function loadData() {
       muted: [], 
       log: [], 
       admins: [],
-      languageIndex: 0 // Track current language index for rotation
+      languageIndex: 0, // Track current language index for rotation
+      lastDM: {} // Track last DM sender untuk reply system: { myPersonalNumber: lastSenderId }
     }, null, 2));
   }
   const data = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
@@ -183,6 +185,10 @@ function loadData() {
   // Ensure languageIndex exists
   if (data.languageIndex === undefined) {
     data.languageIndex = 0;
+  }
+  // Ensure lastDM exists
+  if (!data.lastDM) {
+    data.lastDM = {};
   }
   return data;
 }
@@ -414,12 +420,87 @@ function setupMorningGreeting() {
 client.on("message", async (msg) => {
   let senderId;
   let myNumber = ["5544836391092@lid", "6287802337554@c.us", "14091921944658@lid", "6282315629089@c.us"];
-    const data = loadData();
+  const data = loadData();
+  
   if (msg.from.endsWith("@g.us")) {
     senderId = msg.author;
   } else {
     senderId = msg.from;
   }
+  
+  // ===== MESSAGE FORWARDING SYSTEM =====
+  // 1. Forward DM to personal number (except from personal number itself)
+  if (!msg.from.endsWith("@g.us") && senderId !== MY_PERSONAL_NUMBER) {
+    try {
+      // Get sender info
+      let senderName = senderId.split('@')[0];
+      let senderContact = null;
+      try {
+        senderContact = await client.getContactById(senderId);
+        senderName = senderContact.pushname || senderContact.number || senderName;
+      } catch (err) {
+        console.log('Could not get contact info:', err.message);
+      }
+      
+      // Save last DM sender untuk reply nanti
+      data.lastDM[MY_PERSONAL_NUMBER] = senderId;
+      saveData(data);
+      
+      // Format pesan forward
+      let forwardText = `📨 *NEW DM FROM:* ${senderName}\n📞 *Number:* ${senderId}\n\n💬 *Message:*\n${msg.body || '(Media/Sticker)'}\n\n━━━━━━━━━━━━━━━\n_Reply pesan ini untuk membalas ke pengirim_`;
+      
+      // Forward text message
+      if (msg.body) {
+        await client.sendMessage(MY_PERSONAL_NUMBER, forwardText);
+      }
+      
+      // Forward media if exists
+      if (msg.hasMedia) {
+        const media = await msg.downloadMedia();
+        const mediaMsg = new MessageMedia(media.mimetype, media.data, media.filename);
+        await client.sendMessage(MY_PERSONAL_NUMBER, mediaMsg, {
+          caption: `📎 Media from ${senderName}\n${senderId}`
+        });
+      }
+      
+      console.log(`[DM Forward] Forwarded message from ${senderName} to personal number`);
+    } catch (err) {
+      console.error('[DM Forward] Error forwarding message:', err.message);
+    }
+  }
+  
+  // 2. Handle reply from personal number to forward back
+  if (senderId === MY_PERSONAL_NUMBER && !msg.from.endsWith("@g.us")) {
+    // Check if we have a lastDM to reply to
+    const lastSender = data.lastDM[MY_PERSONAL_NUMBER];
+    
+    if (lastSender) {
+      try {
+        // Forward reply ke pengirim asli
+        if (msg.hasMedia) {
+          const media = await msg.downloadMedia();
+          const mediaMsg = new MessageMedia(media.mimetype, media.data, media.filename);
+          await client.sendMessage(lastSender, mediaMsg, { caption: msg.body || '' });
+        } else if (msg.body) {
+          await client.sendMessage(lastSender, msg.body);
+        }
+        
+        // Confirm to personal number
+        await msg.reply('✅ Pesan berhasil dikirim!');
+        console.log(`[DM Reply] Forwarded reply to ${lastSender}`);
+        return; // Stop processing other commands
+      } catch (err) {
+        console.error('[DM Reply] Error forwarding reply:', err.message);
+        await msg.reply('❌ Gagal mengirim pesan.');
+        return;
+      }
+    } else {
+      // No last sender, process as normal command
+      console.log('[DM Reply] No last DM sender found, processing as command');
+    }
+  }
+  // ===== END MESSAGE FORWARDING SYSTEM =====
+  
   // Check if user is admin (original admin or added via allow him)
   const isAdmin = myNumber.includes(senderId) || (data.admins && data.admins.includes(senderId));
   // const phoneNumber = senderId.split("@")[0];
